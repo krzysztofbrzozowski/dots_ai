@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Play and inspect the Dots game engine." />
+    <title>Dots — Game inspector</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/game.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-block">
+        <h1>Dots</h1>
+        <span>Game inspector</span>
+      </div>
+      <div class="header-actions" aria-label="Game controls">
+        <button id="toggle-debug" class="button button-quiet" type="button" aria-pressed="false">
+          Show debug
+        </button>
+        <button id="reset-game" class="button button-secondary" type="button">Reset</button>
+        <button id="new-game" class="button button-primary" type="button">New game</button>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="workspace" aria-label="Dots game workspace">
+        <article class="card board-card">
+          <div class="card-heading board-heading">
+            <div>
+              <p class="eyebrow">Interactive board</p>
+              <h2 id="board-title">Loading game…</h2>
+            </div>
+            <div class="legend" aria-label="Board legend">
+              <span><i class="legend-dot player-one"></i>Player 1</span>
+              <span><i class="legend-dot player-two"></i>Player 2</span>
+              <span><i class="legend-dot inactive"></i>Captured</span>
+            </div>
+          </div>
+
+          <div id="canvas-wrap" class="canvas-wrap">
+            <canvas
+              id="game-board"
+              tabindex="0"
+              role="application"
+              aria-label="Dots board. Use the pointer, or arrow keys and Enter, to place a dot."
+            >
+              Your browser does not support HTML Canvas.
+            </canvas>
+            <div id="loading-state" class="loading-state">Connecting to the game engine…</div>
+          </div>
+
+          <p class="board-help">
+            Select a legal grid intersection. Coordinates use <strong>(row, column)</strong> and start at 0.
+          </p>
+        </article>
+
+        <aside class="card state-card" aria-labelledby="state-title">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Live engine data</p>
+              <h2 id="state-title">Game state</h2>
+            </div>
+            <span id="turn-pill" class="turn-pill">—</span>
+          </div>
+
+          <div class="score-grid">
+            <div class="score-item player-one-score">
+              <span>Player 1</span>
+              <strong id="score-player-1">0</strong>
+            </div>
+            <div class="score-item player-two-score">
+              <span>Player 2</span>
+              <strong id="score-player-2">0</strong>
+            </div>
+          </div>
+
+          <dl class="state-list">
+            <div><dt>Move number</dt><dd id="move-number">0</dd></div>
+            <div><dt>Last move</dt><dd id="last-move">—</dd></div>
+            <div><dt>Legal moves</dt><dd id="legal-moves">—</dd></div>
+            <div><dt>Last captured dots</dt><dd id="captured-dots">None</dd></div>
+            <div><dt>Capture on last move</dt><dd id="capture-happened">No</dd></div>
+          </dl>
+
+          <details id="debug-details" class="debug-panel">
+            <summary>Debug details</summary>
+            <dl class="debug-list">
+              <div><dt>Could close loop</dt><dd id="could-close-loop">Not checked</dd></div>
+              <div><dt>Candidate seeds</dt><dd id="candidate-count">0</dd></div>
+              <div><dt>Enclosed regions</dt><dd id="region-count">0</dd></div>
+              <div><dt>Opponent cells found</dt><dd id="opponent-cells">None</dd></div>
+            </dl>
+            <div class="debug-code-block">
+              <span>Candidate region seeds</span>
+              <pre id="candidate-regions">[]</pre>
+            </div>
+            <div class="debug-code-block">
+              <span>Detected enclosed regions</span>
+              <pre id="captured-regions">[]</pre>
+            </div>
+          </details>
+
+          <details id="raw-details" class="debug-panel raw-panel">
+            <summary>Raw board state</summary>
+            <div class="raw-state-block">
+              <span>Board</span>
+              <pre id="raw-board">Waiting for state…</pre>
+            </div>
+            <div class="raw-state-block">
+              <span>Territory</span>
+              <pre id="raw-territory">Waiting for state…</pre>
+            </div>
+          </details>
+        </aside>
+      </section>
+
+      <section id="status" class="status-bar" aria-live="polite" aria-atomic="true">
+        <span class="status-indicator" aria-hidden="true"></span>
+        <p>Connecting to the game engine…</p>
+      </section>
+    </main>
+  </body>
+</html>

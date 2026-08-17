@@ -53,6 +53,11 @@ except ImportError:  # Direct imports when running from inside ``game``
     from rendering import BLOCKED_SYMBOL, COLORS, SYMBOLS, render_board
 
 
+# Public name for the cycle-candidate diagnostic. The implementation keeps its
+# historical private name, while external callers can use this stable API name.
+could_have_closed_loop = _could_have_closed_loop
+
+
 __all__ = [
     "BLOCKED_SYMBOL",
     "COLORS",
@@ -64,6 +69,7 @@ __all__ = [
     "PLAYERS",
     "SYMBOLS",
     "UnionFind",
+    "could_have_closed_loop",
     "detect_capture",
     "detect_capture_info",
     "find_candidate_regions",
