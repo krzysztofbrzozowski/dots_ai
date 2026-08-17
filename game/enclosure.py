@@ -1,10 +1,10 @@
-"""Backward-compatible public API for the Dots game.
+"""Backward-compatible public API for the Dots game
 
 Implementation lives in focused modules; imports from ``enclosure`` continue
-to work for existing callers.
+to work for existing callers
 """
 
-try:  # Package imports, for example ``from game.enclosure import DotsGame``.
+try:  # Package imports using the game enclosure module
     from .board import (
         EMPTY,
         PLAYER_1,
@@ -30,7 +30,7 @@ try:  # Package imports, for example ``from game.enclosure import DotsGame``.
         SYMBOLS,
         render_board,
     )
-except ImportError:  # Direct imports when running from inside ``game``.
+except ImportError:  # Direct imports when running from inside ``game``
     from board import (
         EMPTY,
         PLAYER_1,

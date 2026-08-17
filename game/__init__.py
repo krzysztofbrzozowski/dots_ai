@@ -1,3 +1,3 @@
-"""Dots game package."""
+"""Dots game package"""
 
 from .enclosure import *

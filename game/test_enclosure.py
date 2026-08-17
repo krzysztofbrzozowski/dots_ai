@@ -1,7 +1,6 @@
-"""Tests for the Dots enclosure and capture detection.
+"""Tests for the Dots enclosure and capture detection
 
-Run directly:
-    python test_enclosure.py
+Run directly from the game folder
 """
 
 import numpy as np
@@ -11,16 +10,19 @@ from enclosure import (
     PLAYER_1,
     PLAYER_2,
     DotsGame,
+    UnionFind,
+    _could_have_closed_loop,
     detect_capture,
     find_candidate_regions,
     find_enclosed_regions,
     flood_fill_region,
+    rebuild_groups,
     render_board,
 )
 
 
 def _board(rows, cols, cells):
-    """Create an empty board and place the provided dots on it."""
+    """Create an empty board and place the provided dots on it"""
     board = np.zeros((rows, cols), dtype=int)
     for value, (row, col) in cells:
         board[row, col] = value
@@ -28,7 +30,7 @@ def _board(rows, cols, cells):
 
 
 def _territory(rows, cols):
-    """Create an empty territory map."""
+    """Create an empty territory map"""
     return np.zeros((rows, cols), dtype=int)
 
 
@@ -47,6 +49,187 @@ def test_no_enclosure():
     assert detect_capture(board, (2, 3), PLAYER_1) == []
 
 
+def test_connecting_separate_groups_does_not_close_cycle():
+    last_move = (2, 2)
+    board = _board(
+        5,
+        5,
+        [
+            (PLAYER_1, (2, 1)),
+            (PLAYER_1, last_move),
+            (PLAYER_1, (2, 3)),
+        ],
+    )
+    territory = _territory(5, 5)
+    groups = UnionFind()
+    groups.add((2, 1))
+    groups.add((2, 3))
+
+    assert not _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+        groups,
+    )
+    assert detect_capture(
+        board,
+        last_move,
+        PLAYER_1,
+        territory=territory,
+        groups=groups,
+    ) == []
+
+
+def test_active_neighbors_connected_before_move_form_cycle_candidate():
+    last_move = (2, 2)
+    active_path = [
+        (2, 1),
+        (1, 1),
+        (1, 2),
+        (1, 3),
+        (2, 3),
+    ]
+    board = _board(
+        5,
+        5,
+        [(PLAYER_1, cell) for cell in active_path + [last_move]],
+    )
+    territory = _territory(5, 5)
+    pre_move_board = board.copy()
+    pre_move_board[last_move] = EMPTY
+    groups = rebuild_groups(pre_move_board, territory)
+
+    assert _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+        groups,
+    )
+
+
+def test_inactive_bridge_does_not_connect_active_neighbors():
+    last_move = (2, 2)
+    left_neighbor = (2, 1)
+    right_neighbor = (2, 3)
+    inactive_bridge = (1, 2)
+    board = _board(
+        5,
+        5,
+        [
+            (PLAYER_1, left_neighbor),
+            (PLAYER_1, inactive_bridge),
+            (PLAYER_1, right_neighbor),
+            (PLAYER_1, last_move),
+        ],
+    )
+    territory = _territory(5, 5)
+    territory[inactive_bridge] = PLAYER_2
+    groups = UnionFind()
+    groups.add(left_neighbor)
+    groups.add(right_neighbor)
+
+    assert not _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+        groups,
+    )
+
+
+def test_inactive_adjacent_player_dot_is_not_cycle_neighbor():
+    last_move = (2, 2)
+    active_neighbor = (2, 1)
+    inactive_neighbor = (2, 3)
+    board = _board(
+        5,
+        5,
+        [
+            (PLAYER_1, active_neighbor),
+            (PLAYER_1, inactive_neighbor),
+            (PLAYER_1, last_move),
+        ],
+    )
+    territory = _territory(5, 5)
+    territory[inactive_neighbor] = PLAYER_2
+    groups = UnionFind()
+    groups.add(active_neighbor)
+
+    assert not _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+        groups,
+    )
+
+
+def test_rebuilt_pre_move_groups_ignore_inactive_bridge():
+    last_move = (2, 2)
+    inactive_bridge = (1, 2)
+    board = _board(
+        5,
+        5,
+        [
+            (PLAYER_1, (2, 1)),
+            (PLAYER_1, inactive_bridge),
+            (PLAYER_1, (2, 3)),
+            (PLAYER_1, last_move),
+        ],
+    )
+    territory = _territory(5, 5)
+    territory[inactive_bridge] = PLAYER_2
+
+    assert not _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+    )
+
+
+def test_provided_groups_remain_authoritative_with_visible_inactive_dots():
+    class TrackingGroups:
+        def __init__(self, wrapped):
+            self.wrapped = wrapped
+            self.find_calls = []
+
+        def find(self, cell):
+            self.find_calls.append(cell)
+            return self.wrapped.find(cell)
+
+    last_move = (2, 2)
+    inactive_dot = (4, 4)
+    active_path = [
+        (2, 1),
+        (1, 1),
+        (1, 2),
+        (1, 3),
+        (2, 3),
+    ]
+    board = _board(
+        5,
+        5,
+        [(PLAYER_1, cell) for cell in active_path + [last_move, inactive_dot]],
+    )
+    territory = _territory(5, 5)
+    territory[inactive_dot] = PLAYER_2
+    pre_move_board = board.copy()
+    pre_move_board[last_move] = EMPTY
+    groups = TrackingGroups(rebuild_groups(pre_move_board, territory))
+
+    assert _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+        groups,
+    )
+    assert groups.find_calls
+
+
 def test_empty_loop_is_not_capture():
     # A closed loop containing no opponent dot does not create captured territory
     ring = [
@@ -57,6 +240,12 @@ def test_empty_loop_is_not_capture():
     board = _board(3, 3, [(PLAYER_1, cell) for cell in ring])
     territory = _territory(3, 3)
 
+    assert _could_have_closed_loop(
+        board,
+        territory,
+        (1, 2),
+        PLAYER_1,
+    )
     assert detect_capture(board, (1, 2), PLAYER_1, territory=territory) == []
     assert find_enclosed_regions(board, territory, (1, 2), PLAYER_1) == []
 
@@ -76,9 +265,14 @@ def test_square_enclosure_captures_one():
     territory = _territory(4, 4)
     visited = np.zeros(board.shape, dtype=bool)
 
-    region, reaches_edge, opponent_cells = flood_fill_region(
+    assert _could_have_closed_loop(
         board,
         territory,
+        (2, 3),
+        PLAYER_1,
+    )
+    region, reaches_edge, opponent_cells = flood_fill_region(
+        board,
         (2, 2),
         PLAYER_1,
         visited,
@@ -96,7 +290,7 @@ def test_square_enclosure_captures_one():
 
 
 def test_open_region_reaching_board_edge_is_not_captured():
-    # The opponent's region can escape through the open left side.
+    # The opponent's region can escape through the open left side
     wall_with_opening = [
         (0, 0), (0, 1), (0, 2), (0, 3),
                                     (1, 3),
@@ -112,9 +306,14 @@ def test_open_region_reaching_board_edge_is_not_captured():
     territory = _territory(4, 4)
     visited = np.zeros(board.shape, dtype=bool)
 
-    region, reaches_edge, opponent_cells = flood_fill_region(
+    assert _could_have_closed_loop(
         board,
         territory,
+        (2, 3),
+        PLAYER_1,
+    )
+    region, reaches_edge, opponent_cells = flood_fill_region(
+        board,
         (2, 2),
         PLAYER_1,
         visited,
@@ -133,7 +332,7 @@ def test_open_region_reaching_board_edge_is_not_captured():
 
 def test_existing_territory_does_not_complete_active_dot_wall():
     # The opponent is bounded on three sides by active dots, while the fourth
-    # side only appears closed because flood fill encounters old territory.
+    # side only appears closed because flood fill encounters old territory
     board = _board(
         5,
         5,
@@ -149,16 +348,8 @@ def test_existing_territory_does_not_complete_active_dot_wall():
     territory[2, 3] = PLAYER_1
     visited = np.zeros(board.shape, dtype=bool)
 
-    assert (2, 3) in find_candidate_regions(
-        board,
-        territory,
-        (3, 2),
-        PLAYER_1,
-    )
-
     region, reaches_edge, opponent_cells = flood_fill_region(
         board,
-        territory,
         (2, 2),
         PLAYER_1,
         visited,
@@ -231,6 +422,40 @@ def test_diamond_enclosure():
     )
 
     assert detect_capture(board, (2, 1), PLAYER_1) == [(1, 1)]
+
+
+def test_last_move_must_create_the_enclosure():
+    # The diamond already encloses the opponent
+    # The new diagonal dot has two same-player neighbors
+    # but the enclosed region is not orthogonally adjacent to last_move
+    diamond = [(1, 2), (2, 1), (2, 3), (3, 2)]
+    last_move = (1, 1)
+    board = _board(
+        5,
+        5,
+        [(PLAYER_1, cell) for cell in diamond + [last_move]]
+        + [(PLAYER_2, (2, 2))],
+    )
+    territory = _territory(5, 5)
+
+    assert _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+    )
+    assert find_enclosed_regions(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+    ) == []
+    assert detect_capture(
+        board,
+        last_move,
+        PLAYER_1,
+        territory=territory,
+    ) == []
 
 
 def test_cycle_but_no_capture():

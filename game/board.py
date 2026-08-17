@@ -1,4 +1,4 @@
-"""Board values and neighborhood helpers for Dots.
+"""Board values and neighborhood helpers for Dots
 
 Internal board representation
 -----------------------------
@@ -6,9 +6,10 @@ EMPTY = 0
 PLAYER_1 = 1
 PLAYER_2 = -1
 
-The board stores dots only. Captured territory is stored separately so
+The board stores dots only
+Captured territory is stored separately so
 captured dots do not have to be deleted from the board and captured empty
-intersections cannot become playable again.
+intersections cannot become playable again
 """
 
 # --------------------------------------------------------------------------
@@ -36,7 +37,7 @@ NEIGHBORS_8 = ORTHOGONAL + DIAGONAL
 
 
 def opponent_of(player):
-    """Return the opponent of ``player``."""
+    """Return the opponent of ``player``"""
     if player not in PLAYERS:
         raise ValueError("player must be PLAYER_1 or PLAYER_2")
     return -player
@@ -44,8 +45,8 @@ def opponent_of(player):
 
 def get_neighbors(row, col, shape, include_diagonals=True):
     """
-    Return neighbors of ``(row, col) coordinates``.
-    Takes a predefined array of positions and adds it to row and col position.
+    Return neighbors of ``(row, col) coordinates``
+    Takes a predefined array of positions and adds it to row and col position
     """
     rows, cols = shape
     deltas = NEIGHBORS_8 if include_diagonals else ORTHOGONAL

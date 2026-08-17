@@ -1,8 +1,8 @@
-"""Connected groups of active dots."""
+"""Connected groups of active dots"""
 
 import numpy as np
 
-try:  # Support both ``game.groups`` and direct imports from the game folder.
+try:  # Support package and direct imports from the game folder
     from .board import EMPTY, PLAYERS, get_neighbors
 except ImportError:  # pragma: no cover - exercised by the direct test runner
     from board import EMPTY, PLAYERS, get_neighbors
@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover - exercised by the direct test runner
 # Connected groups
 # --------------------------------------------------------------------------
 class UnionFind:
-    """Disjoint-set structure over active dot coordinates."""
+    """Disjoint-set structure over active dot coordinates"""
 
     def __init__(self):
         self._parent = {}
@@ -35,10 +35,10 @@ class UnionFind:
             root = self._parent[root]
 
         # Above the same as:
-        # parent = self._parent[root]
+        # parent = _parent[root]
         # while parent != root:
         #     root = parent
-        #     parent = self._parent[root]
+        #     parent = _parent[root]
 
         # Path compression
         while self._parent[cell] != cell:
@@ -88,17 +88,17 @@ class UnionFind:
 
 
 def find_group(groups, cell):
-    """Return the canonical root of the group containing ``cell``."""
+    """Return the canonical root of the group containing ``cell``"""
     return groups.find(cell)
 
 
 def merge_groups(groups, a, b):
-    """Merge the groups containing ``a`` and ``b``."""
+    """Merge the groups containing ``a`` and ``b``"""
     return groups.union(a, b)
 
 
 def rebuild_groups(board, territory=None):
-    """Build Union-Find from active dots currently on the board."""
+    """Build Union-Find from active dots currently on the board"""
     if territory is None:
         territory = np.zeros(board.shape, dtype=int)
 

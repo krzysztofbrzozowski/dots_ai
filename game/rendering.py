@@ -1,8 +1,8 @@
-"""Text rendering for Dots boards."""
+"""Text rendering for Dots boards"""
 
 import numpy as np
 
-try:  # Support both package and direct imports.
+try:  # Support package and direct imports
     from .board import EMPTY, PLAYER_1, PLAYER_2, PLAYERS
 except ImportError:  # pragma: no cover - exercised by the direct test runner
     from board import EMPTY, PLAYER_1, PLAYER_2, PLAYERS
@@ -29,7 +29,7 @@ BLOCKED_SYMBOL = "×"
 # Rendering
 # --------------------------------------------------------------------------
 def render_board(board, territory=None, colorize=False):
-    """Render the board without changing its internal representation."""
+    """Render the board without changing its internal representation"""
     if territory is None:
         territory = np.zeros(board.shape, dtype=int)
 

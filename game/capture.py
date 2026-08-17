@@ -1,8 +1,8 @@
-"""Board-based enclosure and capture detection.
+"""Board-based enclosure and capture detection
 
 This implementation uses the common rule model in which an enclosure counts
 only when it contains at least one opponent dot, and the enclosed region then
-becomes unavailable for further play.
+becomes unavailable for further play
 
 Connectivity model
 ------------------
@@ -14,21 +14,21 @@ Connectivity model
 
 * Background flood fill uses 4-connectivity -> you can fill areas in 4 directions
 
-        ↑
+       ↑
     ←  X  →
-        ↓
+       ↓
 
-  Flood fill can move only horizontally and vertically, not diagonally.
+  Flood fill can move only horizontally and vertically, not diagonally
 
-* Previously captured territory remains traversable for enclosure geometry.
-  The current player's dots on ``board`` are the only walls.
+* Previously captured territory remains traversable for enclosure geometry
+  The current player's dots on ``board`` are the only walls
 """
 
 from dataclasses import dataclass
 
 import numpy as np
 
-try:  # Support both package and direct imports.
+try:  # Support package and direct imports
     from .board import (
         EMPTY,
         ORTHOGONAL,
@@ -36,8 +36,10 @@ try:  # Support both package and direct imports.
         get_neighbors,
         opponent_of,
     )
+    from .groups import rebuild_groups
 except ImportError:  # pragma: no cover - exercised by the direct test runner
     from board import EMPTY, ORTHOGONAL, PLAYERS, get_neighbors, opponent_of
+    from groups import rebuild_groups
 
 
 # --------------------------------------------------------------------------
@@ -45,7 +47,7 @@ except ImportError:  # pragma: no cover - exercised by the direct test runner
 # --------------------------------------------------------------------------
 @dataclass(frozen=True)
 class CaptureInfo:
-    """Result of one capture check."""
+    """Result of one capture check"""
 
     captured_dots: tuple
     captured_regions: tuple
@@ -56,19 +58,24 @@ class CaptureInfo:
 
 
 def find_candidate_regions(board, territory, last_move, player):
-    """Return local flood-fill seeds around the newly placed dot.
+    """Return local flood-fill seeds around the newly placed dot
 
-    ``territory`` is retained for API compatibility. Only the current player's
-    dots on ``board`` affect enclosure geometry.
+    ``territory`` is retained for API compatibility
+    Only the current player's
+    dots on ``board`` affect enclosure geometry
     """
     row, col = last_move
     seeds = []
 
-    for neighbor in get_neighbors(row, col, board.shape, include_diagonals=True):
-        # Captured territory is game-state information only. It is deliberately
-        # not filtered here because flood fill must be able to pass through it.
+    # Only orthogonal neighbors can belong to a flood-filled region for which
+    # last_move is part of the geometric boundary
+    # Diagonal neighbors still matter to the dot graph
+    # but they are not flood-fill entry points
+    for neighbor in get_neighbors(row, col, board.shape, include_diagonals=False):
+        # Captured territory is game-state information only
+        # It is deliberately not filtered here because flood fill must pass through it
 
-        # Dots of the current player form the actual wall.
+        # Dots of the current player form the actual wall
         if board[neighbor] == player:
             continue
 
@@ -77,11 +84,12 @@ def find_candidate_regions(board, territory, last_move, player):
     return seeds
 
 
-def flood_fill_region(board, territory, seed, player, visited):
-    """Flood-fill one candidate region through non-player cells.
+def flood_fill_region(board, seed, player, visited):
+    """Flood-fill one candidate region through non-player cells
 
-    The current player's dots are walls. Previously captured territory is
-    traversable and does not affect enclosure geometry.
+    The current player's dots are walls
+    Previously captured territory is
+    traversable and does not affect enclosure geometry
 
     Returns
     -------
@@ -115,7 +123,7 @@ def flood_fill_region(board, territory, seed, player, visited):
         if board[row, col] == opponent:
             opponent_cells.append((row, col))
 
-        # Verify if the edge of gameplay is hit
+        # Verify if the edge of game is hit
         if row == 0 or col == 0 or row == rows - 1 or col == cols - 1:
             reaches_edge = True
 
@@ -128,7 +136,7 @@ def flood_fill_region(board, territory, seed, player, visited):
             if visited[neighbor]:
                 continue
 
-            # No territory check here: territory is not a geometric wall.
+            # No territory check here because territory is not a geometric wall
             if board[neighbor] == player:
                 continue
 
@@ -139,28 +147,26 @@ def flood_fill_region(board, territory, seed, player, visited):
 
 
 def find_enclosed_regions(board, territory, last_move, player):
-    """Return newly enclosed regions adjacent to ``last_move``.
+    """Return geometrically enclosed regions adjacent to ``last_move``
 
     An empty loop is not a capture in Dots, therefore only enclosed regions
-    containing at least one opponent dot are returned.
+    containing at least one opponent dot are returned
     """
     visited = np.zeros(board.shape, dtype=bool)
     enclosed = []
 
     # Candidate regions around the newly placed dot:
     #
-    #    seed seed seed
-    #      ↓    ↓    ↓
-    #      .    .    .
-    #      ●    ●    ●
-    #           ↑
-    #       last_move
-    #      .    .    .
-    #      ↑    ↑    ↑
-    #    seed seed seed
+    #          seed
+    #            ↓
+    #    seed -> ● <- seed
+    #            ↑
+    #          seed
+    #
+    #            ● = last_move
     #
     # Player dots form the wall
-    # The surrounding cells become flood-fill seeds
+    # The orthogonally surrounding cells become flood-fill seeds
     # used to check whether they belong to an enclosed region
     for seed in find_candidate_regions(board, territory, last_move, player):
         # At the beginning all of the seeds are not visited (False)
@@ -171,7 +177,6 @@ def find_enclosed_regions(board, territory, last_move, player):
         # Find areas around the new dot that could potentially be enclosed
         region, reaches_edge, opponent_cells = flood_fill_region(
             board,
-            territory,
             seed,
             player,
             visited,
@@ -184,15 +189,16 @@ def find_enclosed_regions(board, territory, last_move, player):
 
 
 def _could_have_closed_loop(board, territory, last_move, player, groups=None):
-    """Cheap board-only pre-check before geometric flood fill.
+    """Return whether adding ``last_move`` creates a player-dot graph cycle
 
-    ``territory`` and ``groups`` remain in the signature for compatibility,
-    but neither is allowed to determine enclosure geometry.
+    ``groups`` should represent connectivity before ``last_move`` was added
+    Standalone callers may omit it; in that case the pre-move graph is rebuilt
+    from active player dots using ``board`` and ``territory``
     """
     row, col = last_move
 
-    # Same-player neighbors around the new dot are the cheapest safe signal
-    # that the move could have closed a loop.
+    # Player dots use 8-connectivity, so every same-player neighbor may provide
+    # one side of a path through last_move
     same_player_neighbors = [
         neighbor
         for neighbor in get_neighbors(
@@ -201,21 +207,32 @@ def _could_have_closed_loop(board, territory, last_move, player, groups=None):
             board.shape,
             include_diagonals=True,
         )
-        if board[neighbor] == player
+        if board[neighbor] == player and territory[neighbor] == EMPTY
     ]
 
-    # If there is at most one dot of the same player, return False.
-    # True only means "run flood fill"; flood fill makes the real decision.
-    #
-    # The earlier implementation compared UnionFind roots here:
-    #
-    # roots = [(1, 1), (1, 1)] -> the neighbors share one active group
-    # roots = [(1, 1), (3, 4)] -> the neighbors belong to different groups
-    #
-    # That information is useful for active connectivity, but it cannot safely
-    # decide board geometry because captured dots remain visible on ``board``
-    # while no longer belonging to active UnionFind groups.
-    return len(same_player_neighbors) >= 2
+    # With fewer than two neighbors, last_move can only extend a line or tree
+    if len(same_player_neighbors) < 2:
+        return False
+
+    # DotsGame supplies its authoritative pre-move active connectivity
+    # Standalone callers rebuild the same state from board and territory
+    if groups is None:
+        pre_move_board = board.copy()
+        pre_move_board[last_move] = EMPTY
+        groups = rebuild_groups(pre_move_board, territory)
+
+    # If two neighbors already had the same root before the move, an existing
+    # path connected them
+    # Adding neighbor -> last_move -> neighbor creates a second path
+    # and therefore closes a graph cycle
+    roots = set()
+    for neighbor in same_player_neighbors:
+        root = groups.find(neighbor)
+        if root in roots:
+            return True
+        roots.add(root)
+
+    return False
 
 
 # New move
@@ -234,12 +251,15 @@ def _could_have_closed_loop(board, territory, last_move, player, groups=None):
 #     ↓
 # Flood fill
 #     ↓
-# Check whether any of these areas
-# is actually enclosed
+# Is the area geometrically enclosed?
+#     ↓
+# Does the inside contain an opponent dot?
 def detect_capture_info(board, last_move, player, territory=None, groups=None):
-    """Return detailed capture information caused by ``last_move``.
+    """Return detailed capture information caused by ``last_move``
 
-    ``board`` must already contain the newly placed dot.
+    ``board`` must already contain the newly placed dot
+    When supplied,
+    ``groups`` must describe connectivity before that dot was added
 
     Return
         -> CaptureInfo(captured_dots=(), captured_regions=()) for no capture
@@ -283,8 +303,8 @@ def detect_capture_info(board, last_move, player, territory=None, groups=None):
         last_move,
         player,
     ):
-        # Territory is game state, not geometry. Filter opponent dots only
-        # after flood fill so a previously scored dot is not captured twice.
+        # Territory is game state and not geometry
+        # Filter opponent dots after flood fill so a scored dot is not captured twice
         new_opponent_cells = [
             cell
             for cell in opponent_cells
@@ -303,9 +323,9 @@ def detect_capture_info(board, last_move, player, territory=None, groups=None):
 
 
 def detect_capture(board, last_move, player, territory=None, groups=None):
-    """Return opponent coordinates captured by ``last_move``.
+    """Return opponent coordinates captured by ``last_move``
 
-    This wrapper keeps the simple API of the original implementation.
+    This wrapper keeps the simple API of the original implementation
     """
     info = detect_capture_info(
         board,

@@ -1,8 +1,8 @@
-"""Mutable Dots game state and move application."""
+"""Mutable Dots game state and move application"""
 
 import numpy as np
 
-try:  # Support both package and direct imports.
+try:  # Support package and direct imports
     from .board import EMPTY, PLAYER_1, PLAYER_2, PLAYERS, get_neighbors
     from .capture import detect_capture_info
     from .groups import UnionFind, rebuild_groups
@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - exercised by the direct test runner
 # Game state
 # --------------------------------------------------------------------------
 class DotsGame:
-    """Dots board with incremental group tracking and capture state."""
+    """Dots board with incremental group tracking and capture state"""
 
     def __init__(self, rows, cols):
         if rows <= 0 or cols <= 0:
@@ -47,7 +47,7 @@ class DotsGame:
         }
 
     def is_legal_move(self, row, col):
-        """Return True when a dot may be placed at ``(row, col)``."""
+        """Return True when a dot may be placed at ``(row, col)``"""
         # Verify if row, col is inside the play area
         # If not, return False, move not allowed
         if not (0 <= row < self.board.shape[0] and 0 <= col < self.board.shape[1]):
@@ -62,7 +62,7 @@ class DotsGame:
         )
 
     def legal_moves(self):
-        """Return all currently legal move coordinates."""
+        """Return all currently legal move coordinates"""
         legal = np.argwhere(
             (self.board == EMPTY)
             & (self.territory == EMPTY)
@@ -88,14 +88,14 @@ class DotsGame:
     #     ↓
     # keep only active neighboring dots belonging to the same player
     #     ↓
-    # groups.union(last_move, neighbor)
+    # union the groups containing last_move and neighbor
     #     ↓
     # if a capture happened:
     #     ├── mark captured regions in territory
     #     ├── update score
     #     └── rebuild UnionFind
     def place_dot(self, row, col, player):
-        """Place one dot and return opponent dots captured by this move."""
+        """Place one dot and return opponent dots captured by this move"""
         if player not in PLAYERS:
             raise ValueError("player must be PLAYER_1 or PLAYER_2")
         if not self.is_legal_move(row, col):
@@ -106,7 +106,7 @@ class DotsGame:
         # ---------------------------------------------------------------
         # CAPTURE DETECTION
         #
-        # 1. Update board first
+        # 1 - Update board first
         #
         #    board = state AFTER the move
         #
@@ -119,7 +119,7 @@ class DotsGame:
         #    Before:
         #
         #    ● ● ●
-        #    ● ○ .
+        #    ● ○ EMPTY
         #    ● ● ●
         #
         #    After:
@@ -130,18 +130,20 @@ class DotsGame:
         #
         self.board[last_move] = player
 
-        # 2. Detect capture from the board state after the move
+        # 2 - Detect capture from the board state after the move
         #
         #    board  = state AFTER the move
         #    groups = active connectivity state BEFORE the move
         #
         #    The new dot is already visible on board, but it has NOT been
-        #    added to UnionFind yet. That update happens in step 3 below.
+        #    added to UnionFind yet
+        #    That update happens in step 3 below
         #
-        #    _could_have_closed_loop() is only a cheap local pre-check.
-        #    If it returns True, flood fill performs the real geometric check.
+        #    _could_have_closed_loop() uses the pre-move UnionFind state to
+        #    prove that last_move adds a second path and closes a graph cycle
+        #    Only then does flood fill determine the enclosed geometry
         #    Territory is passed for game-state handling such as avoiding
-        #    duplicate scoring, but it is not part of enclosure geometry.
+        #    duplicate scoring but it is not part of enclosure geometry
         capture = detect_capture_info(
             self.board,
             last_move,
@@ -150,7 +152,7 @@ class DotsGame:
             groups=self.groups,
         )
 
-        # 3. Update UnionFind AFTER capture detection
+        # 3 - Update UnionFind AFTER capture detection
         #
         #    -> add the new dot as a new one-element group
         #    -> find its neighboring dots
@@ -186,8 +188,8 @@ class DotsGame:
         # ---------------------------------------------------------------
 
         if capture.happened:
-            # Mark newly captured cells as unavailable territory. Existing
-            # territory keeps its owner when a larger enclosure contains it.
+            # Mark newly captured cells as unavailable territory
+            # Existing territory keeps its owner when a larger enclosure contains it
             for region in capture.captured_regions:
                 for cell in region:
                     if self.territory[cell] == EMPTY:
@@ -203,7 +205,7 @@ class DotsGame:
         return list(capture.captured_dots)
 
     def render(self, colorize=False):
-        """Render this game board."""
+        """Render this game board"""
         return render_board(
             self.board,
             territory=self.territory,
