@@ -123,7 +123,15 @@ def flood_fill_region(board, seed, player, visited):
         if board[row, col] == opponent:
             opponent_cells.append((row, col))
 
-        # Verify if the edge of game is hit
+        # Verify if any edge of game is hit, then it is known that we loop is not closed
+        # # Known limitation:
+        # `reaches_edge` cannot reliably distinguish the inside of a newly created loop
+        # when that loop is itself located inside another already closed loop
+        #
+        # In such a nested-loop case, both sides of the new loop may have
+        # `reaches_edge == False`, because neither region can reach the board edge
+        #
+        # For now, this edge case is intentionally left unsupported 
         if row == 0 or col == 0 or row == rows - 1 or col == cols - 1:
             reaches_edge = True
 
