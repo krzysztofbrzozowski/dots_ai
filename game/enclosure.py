@@ -154,6 +154,12 @@ class UnionFind:
         while self._parent[root] != root:
             root = self._parent[root]
 
+        # Above the same as:
+        # parent = self._parent[root]
+        # while parent != root:
+        #     root = parent
+        #     parent = self._parent[root]
+
         # Path compression
         while self._parent[cell] != cell:
             parent = self._parent[cell]
@@ -182,6 +188,7 @@ class UnionFind:
         root_a = self.find(a)
         root_b = self.find(b)
 
+        # If already connected, return False
         if root_a == root_b:
             return False
 
@@ -259,7 +266,7 @@ class CaptureInfo:
 
 
 def find_candidate_regions(board, territory, last_move, player):
-    """Return local flood-fill seeds around the newly placed dot."""
+    """Return local flood-fill seeds (starting points) around the newly placed dot"""
     row, col = last_move
     seeds = []
 
@@ -277,7 +284,7 @@ def find_candidate_regions(board, territory, last_move, player):
     return seeds
 
 
-def flood_fill_region(board, territory, start, player, visited):
+def flood_fill_region(board, territory, seed, player, visited):
     """Flood-fill one candidate region through active non-player cells
 
     The current player's active dots are walls
@@ -295,29 +302,31 @@ def flood_fill_region(board, territory, start, player, visited):
     rows, cols = board.shape
     opponent = opponent_of(player)
 
-    if visited[start]:
-        return [], False, []
-
-    if territory[start] != EMPTY:
-        return [], False, []
-
-    if board[start] == player:
-        return [], False, []
-
-    stack = [start]
-    visited[start] = True
-
     region = []
     opponent_cells = []
     reaches_edge = False
 
+    if visited[seed]:
+        return region, reaches_edge, opponent_cells
+
+    if territory[seed] != EMPTY:
+        return region, reaches_edge, opponent_cells
+
+    if board[seed] == player:
+        return region, reaches_edge, opponent_cells
+
+    stack = [seed]
+    visited[seed] = True
+
     while stack:
+        # Remove last element and assing it to row, col
         row, col = stack.pop()
         region.append((row, col))
 
         if board[row, col] == opponent:
             opponent_cells.append((row, col))
 
+        # Verify if edge of gameplay is hitted
         if row == 0 or col == 0 or row == rows - 1 or col == cols - 1:
             reaches_edge = True
 
@@ -348,10 +357,28 @@ def find_enclosed_regions(board, territory, last_move, player):
     visited = np.zeros(board.shape, dtype=bool)
     enclosed = []
 
+    # Candidate regions around the newly placed dot:
+    #
+    #    seed seed seed
+    #      ↓    ↓    ↓
+    #      .    .    .
+    #      ●    ●    ●
+    #           ↑
+    #       last_move
+    #      .    .    .
+    #      ↑    ↑    ↑
+    #    seed seed seed
+    #
+    # Player dots form the wall
+    # The surrounding cells become flood-fill seeds
+    # used to check whether they belong to an enclosed region
     for seed in find_candidate_regions(board, territory, last_move, player):
+        # At the begining all of the seeds are not visited (False)
         if visited[seed]:
             continue
-
+        
+        # Main dots logic -> 
+        # Find areas around the new dot that could potentially be enclosed
         region, reaches_edge, opponent_cells = flood_fill_region(
             board,
             territory,
@@ -367,33 +394,79 @@ def find_enclosed_regions(board, territory, last_move, player):
 
 
 def _could_have_closed_loop(board, territory, last_move, player, groups=None):
-    """Cheaply decide whether ``last_move`` could have closed a cycle."""
+    """Cheaply decide whether ``last_move`` could have closed a cycle"""
     row, col = last_move
 
+    # Same player naighbor is the area with own dots and teritory not catched
+    # TODO -> this might be changed (depending on dots rules)
     same_player_neighbors = [
         neighbor
         for neighbor in get_neighbors(row, col, board.shape, include_diagonals=True)
         if board[neighbor] == player and territory[neighbor] == EMPTY
     ]
 
+    # If 1 max dot of the same player return False
     if len(same_player_neighbors) < 2:
         return False
 
     # Without a pre-move DSU we use a weaker safe trigger
+    # groups = UnionFind method, if is not passed, maybe something is already connected?
     if groups is None:
         return True
 
     # A new cycle is possible when at least two neighbors already belonged
     # to the same connected component before the new dot was added
     roots = [groups.find(neighbor) for neighbor in same_player_neighbors]
+    # Example 1:
+    # roots = [(1, 1), (1, 1)]
+    #
+    # len(roots) = 2
+    # len(set(roots)) = 1
+    #
+    # 1 < 2 -> True
+    # At least two neighboring dots have the same root,
+    # so they already belong to the same connected group
+
+
+    # Example 2:
+    # roots = [(1, 1), (3, 4)]
+    #
+    # len(roots) = 2
+    # len(set(roots)) = 2
+    #
+    # 2 < 2 -> False
+    # The neighboring dots have different roots,
+    # so they belong to different connected groups
     return len(set(roots)) < len(roots)
 
 
+# New move
+#     ↓
+# _could_have_closed_loop()
+#     ↓
+# Could this move have closed a loop?
+#     ↓
+# NO  -> stop, nothing to check
+# YES
+#     ↓
+# find_candidate_regions()
+#     ↓
+# Find areas around the new dot
+# that could potentially be enclosed
+#     ↓
+# Flood fill
+#     ↓
+# Check whether any of these areas
+# is actually enclosed
 def detect_capture_info(board, last_move, player, territory=None, groups=None):
     """Return detailed capture information caused by ``last_move``
 
     ``board`` must already contain the newly placed dot
     ``groups`` should describe active connectivity before the new move
+
+    Return
+        -> CaptureInfo(captured_dots=(), captured_regions=() -> Empty CaptureInfo class
+        -> or 
     """
     if territory is None:
         territory = np.zeros(board.shape, dtype=int)
@@ -412,7 +485,15 @@ def detect_capture_info(board, last_move, player, territory=None, groups=None):
     if territory[row, col] != EMPTY:
         raise ValueError("last_move cannot be inside captured territory")
 
-    if not _could_have_closed_loop(board, territory, last_move, player, groups):
+    # _could_have_closed_loop() == False
+    # -> return empty CaptureInfo immediately
+    # -> no flood fill is needed
+    #
+    # _could_have_closed_loop() == True
+    # -> do NOT return here
+    # -> continue with flood fill to verify whether a real capture happened
+    if not _could_have_closed_loop(board, territory, last_move, player, groups):\
+        # If _could_have_closed_loop(...) == False
         return CaptureInfo(captured_dots=(), captured_regions=())
 
     captured_dots = []
@@ -489,10 +570,20 @@ class DotsGame:
         if rows <= 0 or cols <= 0:
             raise ValueError("rows and cols must be positive")
 
+        # board stores the dots currently placed on the board
+        #  0 -> empty cell
+        #  1 -> PLAYER_1 dot
+        # -1 -> PLAYER_2 dot
         self.board = np.zeros((rows, cols), dtype=int)
 
-        # 0 means active/playable area
-        # 1 or -1 means territory captured by that player
+        # Rerritory stores areas that have already been captured by some player
+        # and can not be captured anymore
+        #  0 -> active/playable area
+        #  1 -> area captured by PLAYER_1
+        # -1 -> area captured by PLAYER_2
+        #
+        # A territory cell does not have to contain a dot
+        # It simply means that this area was already enclosed and is no longer playable
         self.territory = np.zeros((rows, cols), dtype=int)
 
         self.groups = UnionFind()
@@ -502,39 +593,53 @@ class DotsGame:
         }
 
     def is_legal_move(self, row, col):
-        """Return True when a dot may be placed at ``(row, col)``."""
+        """Return True when a dot may be placed at ``(row, col)``"""
+        # Verify if place row, col is smaller than the play area
+        # If so, retunr False, move not allowed
         if not (0 <= row < self.board.shape[0] and 0 <= col < self.board.shape[1]):
             return False
 
+        # Return True if place you want to put dot is
+        # -> still empty
+        # -> and "teritory" is not taken by any player
         return (
             self.board[row, col] == EMPTY
             and self.territory[row, col] == EMPTY
         )
 
     def legal_moves(self):
-        """Return all currently legal moves."""
+        """Return all currently legal moves coordinates"""
         legal = np.argwhere(
             (self.board == EMPTY)
             & (self.territory == EMPTY)
         )
         return [tuple(cell) for cell in legal]
 
-    # Update connected groups after placing a new dot
+    # Place a new dot and update capture / connectivity state
     #
     # Flow:
     # place_dot()
     #     ↓
+    # validate the move
+    #     ↓
+    # add the new dot to board
+    #     ↓
+    # detect_capture_info()
+    #     ├── board represents the state AFTER the move
+    #     └── groups still represents connectivity BEFORE the move
+    #     ↓
+    # add the new dot to UnionFind
+    #     ↓
     # get_neighbors()
     #     ↓
-    # check whether the neighbor belongs to the same player
-    #     ↓ yes
-    # merge_groups(...)
+    # keep only active neighboring dots belonging to the same player
     #     ↓
-    # groups.union(a, b)
-    #
-    # UnionFind itself does not check board geometry
-    # get_neighbors() ensures that union() is called only for actual neighboring dots
-    # belonging to the same player
+    # groups.union(last_move, neighbor)
+    #     ↓
+    # if a capture happened:
+    #     ├── mark captured regions in territory
+    #     ├── update score
+    #     └── rebuild UnionFind
     def place_dot(self, row, col, player):
         """Place one dot and return the opponent dots captured by this move."""
         if player not in PLAYERS:
@@ -545,10 +650,50 @@ class DotsGame:
 
         last_move = (row, col)
 
-        # Place the new dot first so geometric verification sees the new wall
+        # ---------------------------------------------------------------
+        # CAPTURE DETECTION
+        #
+        # 1. Update board first
+        #
+        #    board = state AFTER the move
+        #
+        #    Flood fill (explores all reachable connected cells in a region) 
+        #    -> must see the newly placed dot because this dot
+        #    may be the one that closes the boundary around an opponent
+        #
+        #    Example:
+        #
+        #    Before:
+        #
+        #    ● ● ●
+        #    ● ○ .
+        #    ● ● ●
+        #
+        #    After:
+        #
+        #    ● ● ●
+        #    ● ○ ●   <- last_move closes the boundary
+        #    ● ● ●
+        #
         self.board[last_move] = player
 
-        # groups still describes the position before this move
+        # 2. Detect capture using the OLD UnionFind state
+        #
+        #    board  = state AFTER the move
+        #    groups = state BEFORE the move
+        #    -> Clue: Use groups to quickly check whether the newly placed dot
+        #       could have closed a loop
+        #
+        #       If yes, run the more expensive flood fill verification
+        #
+        #    The new dot is already visible on board, but it has NOT been
+        #    added to UnionFind yet
+        #    # TODO -> verify this with clear mind
+        #    This lets us check whether the new dot connects neighboring
+        #    dots that were already part of the same connected group
+        #   
+        #    If they were already connected before this move, the new dot
+        #    may have closed a loop
         capture = detect_capture_info(
             self.board,
             last_move,
@@ -557,37 +702,57 @@ class DotsGame:
             groups=self.groups,
         )
 
-        # Register the new active dot and merge it with active same-player dots
+        # 3. Update UnionFind AFTER capture detection
+        #
+        #    -> add the new dot as a new one-element group
+        #    -> find its neighboring dots
+        #    -> connect it with active neighboring dots of the same player
+        #
+        #    UnionFind itself does not check board geometry
+        #    get_neighbors() ensures that only real neighboring cells
+        #    are considered
         self.groups.add(last_move)
 
-        # Iterate over all possible neighbors of the last_move and verify
-        # -> neighbor is not empty
-        # -> neighbor does not belong to opposite player (verifes PLAYER_1 = 1 and PLAYER_2 = -1)
-        # -> neighbor not added to the gropus - skip it
-        # get_neighbors() ensures that only actual neighboring cells are checked
-        # union() is called only when the neighboring dot belongs to the same player
-        for neighbor in get_neighbors(row, col, self.board.shape, include_diagonals=True):
+        for neighbor in get_neighbors(
+            row,
+            col,
+            self.board.shape,
+            include_diagonals=True,
+        ):
+            # Skip previously captured territory
             if self.territory[neighbor] != EMPTY:
                 continue
+
+            # Skip empty cells and opponent dots
             if self.board[neighbor] != player:
                 continue
+
+            # Skip dots that are not active UnionFind nodes
             if neighbor not in self.groups:
                 continue
 
+            # Both dots are active neighbors belonging to the same player
             self.groups.union(last_move, neighbor)
 
+        # ---------------------------------------------------------------
+        # APPLY CAPTURE
+        # ---------------------------------------------------------------
+
         if capture.happened:
-            # Keep captured dots on the board and mark the whole captured region
-            # as unavailable for later moves
+            # Mark the whole captured region as unavailable territory
             for region in capture.captured_regions:
                 for cell in region:
                     self.territory[cell] = player
 
+            # Add captured opponent dots to the player's score
             self.score[player] += len(capture.captured_dots)
 
-            # Captured dots must not participate in later connected groups
-            # Rebuilding after a capture avoids stale DSU connections
-            self.groups = rebuild_groups(self.board, self.territory)
+            # Rebuild UnionFind because captured dots must no longer
+            # participate in active connected groups
+            self.groups = rebuild_groups(
+                self.board,
+                self.territory,
+            )
 
         return list(capture.captured_dots)
 
@@ -596,4 +761,4 @@ class DotsGame:
             self.board,
             territory=self.territory,
             colorize=colorize,
-        )
+    )
