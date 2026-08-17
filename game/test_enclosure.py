@@ -12,7 +12,9 @@ from enclosure import (
     PLAYER_2,
     DotsGame,
     detect_capture,
+    find_candidate_regions,
     find_enclosed_regions,
+    flood_fill_region,
     render_board,
 )
 
@@ -61,6 +63,127 @@ def test_empty_loop_is_not_capture():
 
 def test_square_enclosure_captures_one():
     ring = [
+        (row, col)
+        for row in range(4)
+        for col in range(4)
+        if row in (0, 3) or col in (0, 3)
+    ]
+    board = _board(
+        4,
+        4,
+        [(PLAYER_1, cell) for cell in ring] + [(PLAYER_2, (2, 2))],
+    )
+    territory = _territory(4, 4)
+    visited = np.zeros(board.shape, dtype=bool)
+
+    region, reaches_edge, opponent_cells = flood_fill_region(
+        board,
+        territory,
+        (2, 2),
+        PLAYER_1,
+        visited,
+    )
+
+    assert set(region) == {(1, 1), (1, 2), (2, 1), (2, 2)}
+    assert reaches_edge is False
+    assert opponent_cells == [(2, 2)]
+    assert detect_capture(
+        board,
+        (2, 3),
+        PLAYER_1,
+        territory=territory,
+    ) == [(2, 2)]
+
+
+def test_open_region_reaching_board_edge_is_not_captured():
+    # The opponent's region can escape through the open left side.
+    wall_with_opening = [
+        (0, 0), (0, 1), (0, 2), (0, 3),
+                                    (1, 3),
+                                    (2, 3),
+        (3, 0), (3, 1), (3, 2), (3, 3),
+    ]
+    board = _board(
+        4,
+        4,
+        [(PLAYER_1, cell) for cell in wall_with_opening]
+        + [(PLAYER_2, (2, 2))],
+    )
+    territory = _territory(4, 4)
+    visited = np.zeros(board.shape, dtype=bool)
+
+    region, reaches_edge, opponent_cells = flood_fill_region(
+        board,
+        territory,
+        (2, 2),
+        PLAYER_1,
+        visited,
+    )
+
+    assert (2, 0) in region
+    assert reaches_edge is True
+    assert opponent_cells == [(2, 2)]
+    assert detect_capture(
+        board,
+        (2, 3),
+        PLAYER_1,
+        territory=territory,
+    ) == []
+
+
+def test_existing_territory_does_not_complete_active_dot_wall():
+    # The opponent is bounded on three sides by active dots, while the fourth
+    # side only appears closed because flood fill encounters old territory.
+    board = _board(
+        5,
+        5,
+        [
+            (PLAYER_1, (1, 2)),
+            (PLAYER_1, (2, 1)),
+            (PLAYER_1, (3, 2)),
+            (PLAYER_1, (3, 3)),
+            (PLAYER_2, (2, 2)),
+        ],
+    )
+    territory = _territory(5, 5)
+    territory[2, 3] = PLAYER_1
+    visited = np.zeros(board.shape, dtype=bool)
+
+    assert (2, 3) in find_candidate_regions(
+        board,
+        territory,
+        (3, 2),
+        PLAYER_1,
+    )
+
+    region, reaches_edge, opponent_cells = flood_fill_region(
+        board,
+        territory,
+        (2, 2),
+        PLAYER_1,
+        visited,
+    )
+
+    assert (2, 3) in region
+    assert (2, 4) in region
+    assert reaches_edge is True
+    assert opponent_cells == [(2, 2)]
+    assert find_enclosed_regions(
+        board,
+        territory,
+        (3, 2),
+        PLAYER_1,
+    ) == []
+    assert detect_capture(
+        board,
+        (3, 2),
+        PLAYER_1,
+        territory=territory,
+    ) == []
+
+
+def test_previously_captured_opponent_dot_is_not_reported_again():
+    ring = [
         (0, 0), (0, 1), (0, 2),
         (1, 0),         (1, 2),
         (2, 0), (2, 1), (2, 2),
@@ -70,8 +193,15 @@ def test_square_enclosure_captures_one():
         3,
         [(PLAYER_1, cell) for cell in ring] + [(PLAYER_2, (1, 1))],
     )
+    territory = _territory(3, 3)
+    territory[1, 1] = PLAYER_1
 
-    assert detect_capture(board, (1, 2), PLAYER_1) == [(1, 1)]
+    assert detect_capture(
+        board,
+        (1, 2),
+        PLAYER_1,
+        territory=territory,
+    ) == []
 
 
 def test_enclosure_captures_multiple():
@@ -210,6 +340,29 @@ def test_entire_captured_region_becomes_unplayable():
     # but they are still illegal because territory marks them as blocked
     assert game.board[1, 1] == EMPTY
     assert not game.is_legal_move(1, 1)
+
+
+def test_new_capture_preserves_existing_territory_owner():
+    game = DotsGame(5, 5)
+    assert game.place_dot(2, 2, PLAYER_2) == []
+    game.territory[1, 1] = PLAYER_2
+
+    border = [
+        (row, col)
+        for row in range(5)
+        for col in range(5)
+        if row in (0, 4) or col in (0, 4)
+    ]
+    closing_move = (0, 2)
+    border.remove(closing_move)
+
+    for cell in border:
+        assert game.place_dot(*cell, PLAYER_1) == []
+
+    assert game.place_dot(*closing_move, PLAYER_1) == [(2, 2)]
+    assert game.territory[1, 1] == PLAYER_2
+    assert game.territory[2, 2] == PLAYER_1
+    assert game.score[PLAYER_1] == 1
 
 
 def test_render_captured_empty_territory():
