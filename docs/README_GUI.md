@@ -102,6 +102,84 @@ updated state returned as JSON
 redraw board and information panel
 ```
 
+### Code example
+
+The following simplified example shows how the layers connect. The browser
+converts the pointer position into a coordinate and sends only that coordinate
+to Python:
+
+```javascript
+canvas.addEventListener("click", (event) => {
+  const cell = eventToCell(event); // pixel position -> [row, col]
+  if (!cell) return;
+
+  submitMove(cell[0], cell[1]);
+});
+
+async function submitMove(row, col) {
+  const response = await fetch("/api/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ row, col }),
+  });
+
+  const payload = await response.json();
+  const state = response.ok ? payload : payload.state;
+  setGameState(state); // update the panel and redraw the Canvas
+}
+```
+
+FastAPI receives the coordinate. The GUI server obtains `DotsGame` from the
+public `game.enclosure` API and delegates validation and state changes to it:
+
+```python
+from game.enclosure import DotsGame, PLAYER_1, opponent_of
+
+
+class GameSession:
+    def __init__(self, rows, cols):
+        self.game = DotsGame(rows, cols)
+        self.current_player = PLAYER_1
+
+    def apply_move(self, row, col):
+        if not self.game.is_legal_move(row, col):
+            return False, self._state_unlocked()
+
+        moving_player = self.current_player
+        captured = self.game.place_dot(row, col, moving_player)
+        self.current_player = opponent_of(moving_player)
+
+        # _state_unlocked() serializes board, territory, scores, and metadata.
+        return True, self._state_unlocked()
+
+
+@app.post("/api/move")
+def post_move(move: MoveRequest):
+    succeeded, state = session.apply_move(move.row, move.col)
+    if not succeeded:
+        return JSONResponse(status_code=409, content={
+            "error": "Illegal move",
+            "state": state,
+        })
+    return state
+```
+
+Finally, JavaScript uses the returned arrays and metadata to update the visible
+interface:
+
+```javascript
+function setGameState(state) {
+  view.game = state;
+  updateInformationPanel();
+  resizeAndDrawBoard();
+}
+```
+
+The snippets omit diagnostic and status-message details for readability. The
+important boundary remains the same: JavaScript sends user input, while the
+Python game engine validates the move and performs all board, capture,
+territory, connectivity, and scoring updates.
+
 Coordinates are zero-based. `(0, 0)` is the top-left intersection. The first
 number is the row and the second number is the column.
 
