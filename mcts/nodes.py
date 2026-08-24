@@ -5,9 +5,10 @@ from abc import ABC, abstractmethod
 
 class MCTSNode(ABC):
 
-    def __init__(self, state, parent=None):
+    def __init__(self, state, parent=None, action=None):
         self.state = state
         self.parent = parent
+        self.action = action
         self.children = []
 
     @property
@@ -92,8 +93,8 @@ class MCTSNode(ABC):
 
 class TwoPlayerMCTSNode(MCTSNode):
 
-    def __init__(self, state, parent=None):
-        super().__init__(state, parent)
+    def __init__(self, state, parent=None, action=None):
+        super().__init__(state, parent, action)
         self._number_of_visits = 0.
         self._results = defaultdict(int)
         self._untried_actions = None
@@ -101,7 +102,8 @@ class TwoPlayerMCTSNode(MCTSNode):
     @property
     def untried_actions(self):
         if self._untried_actions is None:
-            self._untried_actions = self.state.get_legal_actions()
+            self._untried_actions = list(self.state.get_legal_actions())
+            # np.random.shuffle(self._untried_actions)
         return self._untried_actions
 
     @property
@@ -133,7 +135,9 @@ class TwoPlayerMCTSNode(MCTSNode):
         #   -> next_state - independent game-state (board) object
         #   -> parent - current_node will be parent (in first iteration root)
         child_node = TwoPlayerMCTSNode(
-            state=next_state, parent=self
+            state=next_state,
+            parent=self,
+            action=action,
         )
         self.children.append(child_node)
         return child_node

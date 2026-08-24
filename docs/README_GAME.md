@@ -85,6 +85,9 @@ state
 | `self.territory` | A `rows × cols` integer array filled with `0` | Stores captured ownership |
 | `self.groups` | An empty `UnionFind` | Stores active dot connectivity |
 | `self.score` | `{PLAYER_1: 0, PLAYER_2: 0}` | Counts opponent dots captured by each player |
+| `self.next_to_move` | `PLAYER_1` | Stores the turn as part of an MCTS state |
+| `self.last_move` | `None` | Stores the most recently applied coordinate |
+| `self.last_captured_dots` | `[]` | Stores captures produced by the latest move |
 
 The main temporary name used during a move is `last_move`
 It is the `(row, col)` coordinate just written to the board and is the move that
@@ -1267,7 +1270,8 @@ allocating a `visited` array and exploring board regions
 This split is useful whenever many moves are evaluated
 It is especially suitable for later search systems such as Monte Carlo Tree
 Search, where simulated moves may be applied repeatedly
-The current modules implement the game and capture logic, not MCTS itself
+`DotsGame.copy()` and `DotsGame.move(action)` provide independent branch states;
+the tree-search algorithm itself remains in the separate `mcts` package
 
 # Important invariants
 
@@ -1319,9 +1323,13 @@ This table is a compact reference after the conceptual explanation above
 | `UnionFind.find(cell)` | Find and compress the path to the group's representative | A registered cell | Root coordinate, or `KeyError` for an unknown cell |
 | `UnionFind.union(a, b)` | Merge two registered groups using rank | Two registered cells | `True` if merged, `False` if already connected |
 | `UnionFind.connected(a, b)` | Compare the roots of two registered cells | Two registered cells | `bool` |
+| `UnionFind.copy()` | Copy connectivity for an independent search branch | Current UnionFind | New `UnionFind` object |
 | `rebuild_groups(board, territory=None)` | Recreate eight-connected same-player groups from active dots | Board and optional territory | New `UnionFind` object |
 | `DotsGame.is_legal_move(row, col)` | Check bounds, board emptiness, and territory emptiness | Row and column | `bool` |
 | `DotsGame.legal_moves()` | Find every cell that is empty in both arrays | Current game state | `list` of coordinate tuples |
+| `DotsGame.get_legal_actions()` | Expose legal moves through the MCTS state interface | Current game state | `list` of coordinate tuples |
+| `DotsGame.copy()` | Copy every mutable part of a game state | Current game state | Independent `DotsGame` object |
+| `DotsGame.move(action)` | Apply an action to a copy and switch the copied turn | `(row, col)` | Independent successor `DotsGame` |
 | `DotsGame.place_dot(row, col, player)` | Apply one move, detect and apply capture, update groups and score | Coordinate and player | `list` of newly captured opponent coordinates |
 | `_could_have_closed_loop(board, territory, last_move, player, groups=None)` | Check whether `last_move` created an active graph cycle candidate | Post-move board, territory, move, player, optional pre-move groups | `bool` |
 | `find_candidate_regions(board, territory, last_move, player)` | Find orthogonal non-player flood-fill seeds around `last_move` | Board state and move context | `list` of seed coordinates |

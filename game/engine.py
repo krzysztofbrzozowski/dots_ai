@@ -45,6 +45,9 @@ class DotsGame:
             PLAYER_1: 0,
             PLAYER_2: 0,
         }
+        self.next_to_move = PLAYER_1
+        self.last_move = None
+        self.last_captured_dots = []
 
     def is_legal_move(self, row, col):
         """Return True when a dot may be placed at ``(row, col)``"""
@@ -67,7 +70,46 @@ class DotsGame:
             (self.board == EMPTY)
             & (self.territory == EMPTY)
         )
-        return [tuple(cell) for cell in legal]
+        return [tuple(int(value) for value in cell) for cell in legal]
+
+    def get_legal_actions(self):
+        """Return legal actions using the interface expected by MCTS."""
+        return self.legal_moves()
+
+    def copy(self):
+        """Return an independent game state suitable for a search branch."""
+        rows, cols = self.board.shape
+        copied = DotsGame(rows, cols)
+        copied.board = self.board.copy()
+        copied.territory = self.territory.copy()
+        copied.groups = self.groups.copy()
+        copied.score = self.score.copy()
+        copied.next_to_move = self.next_to_move
+        copied.last_move = self.last_move
+        copied.last_captured_dots = list(self.last_captured_dots)
+        return copied
+
+    def move(self, action):
+        """Return an independent state with the given MCTS action applied."""
+        if not isinstance(action, (tuple, list)) or len(action) != 2:
+            raise ValueError("action must contain exactly (row, col)")
+
+        row, col = action
+        integer_types = (int, np.integer)
+
+        if isinstance(row, (bool, np.bool_)) or not isinstance(row, integer_types):
+            raise TypeError("row must be an integer")
+        if isinstance(col, (bool, np.bool_)) or not isinstance(col, integer_types):
+            raise TypeError("col must be an integer")
+
+        row = int(row)
+        col = int(col)
+
+        next_state = self.copy()
+        moving_player = next_state.next_to_move
+        next_state.place_dot(row, col, moving_player)
+        next_state.next_to_move = -moving_player
+        return next_state
 
     @property
     def game_result(self):
@@ -220,8 +262,10 @@ class DotsGame:
             # participate in active connected groups
             self.groups = rebuild_groups(self.board, self.territory)
 
-        return list(capture.captured_dots)
-        
+        captured_dots = list(capture.captured_dots)
+        self.last_move = last_move
+        self.last_captured_dots = captured_dots
+        return captured_dots
 
     def render(self, colorize=False):
         """Render this game board"""

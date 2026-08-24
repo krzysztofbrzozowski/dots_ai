@@ -21,6 +21,13 @@ class UnionFind:
     def __contains__(self, cell):
         return cell in self._parent
 
+    def copy(self):
+        """Return an independent copy of this connectivity structure."""
+        copied = UnionFind()
+        copied._parent = self._parent.copy()
+        copied._rank = self._rank.copy()
+        return copied
+
     def add(self, cell):
         if cell not in self._parent:
             self._parent[cell] = cell

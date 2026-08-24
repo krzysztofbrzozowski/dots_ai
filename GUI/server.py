@@ -1,196 +1,85 @@
-"""FastAPI adapter for the browser-based Dots inspector.
+"""Read-only HTTP presentation layer for an MCTS-driven Dots game.
 
-The API owns turn metadata, while ``DotsGame`` remains responsible for move
-validation, captures, territory, connectivity, and scoring.
+``main_mcts.py`` owns the game and publishes serialized snapshots here. This
+module only stores the latest snapshot and serves it to browser clients.
 """
 
+from copy import deepcopy
 from pathlib import Path
 from threading import RLock
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
-
-from game.enclosure import (
-    PLAYER_1,
-    PLAYER_2,
-    DotsGame,
-    could_have_closed_loop,
-    detect_capture_info,
-    find_candidate_regions,
-    opponent_of,
-)
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 
 GUI_DIR = Path(__file__).resolve().parent
-DEFAULT_ROWS = 10
-DEFAULT_COLS = 10
-
-
-class MoveRequest(BaseModel):
-    """Coordinates selected by the browser."""
-
-    row: int
-    col: int
 
 
 def _coordinates(cells):
-    """Convert NumPy-friendly coordinate tuples into JSON-friendly lists."""
-
+    """Convert NumPy-friendly coordinates into JSON-compatible lists."""
     return [[int(row), int(col)] for row, col in cells]
 
 
-def _regions(regions):
-    return [_coordinates(region) for region in regions]
+class SnapshotStore:
+    """Keep an isolated, versioned copy of the latest display state."""
 
-
-class GameSession:
-    """Keep one local game and the small amount of turn/UI metadata around it."""
-
-    def __init__(self, rows=DEFAULT_ROWS, cols=DEFAULT_COLS):
-        self.rows = rows
-        self.cols = cols
+    def __init__(self):
         self._lock = RLock()
-        self.reset()
+        self._snapshot = None
+        self._version = 0
 
-    @staticmethod
-    def _empty_debug():
-        return {
-            "could_have_closed_loop": None,
-            "candidate_region_count": 0,
-            "candidate_regions": [],
-            "enclosed_region_count": 0,
-            "detected_enclosed_regions": [],
-            "opponent_cells_found": [],
-            "capture_happened": False,
-            "captured_dots": [],
-            "captured_regions": [],
-        }
-
-    def reset(self):
+    def publish(self, snapshot):
+        """Store and return an independent copy of ``snapshot``."""
         with self._lock:
-            self.game = DotsGame(self.rows, self.cols)
-            self.current_player = PLAYER_1
-            self.move_number = 0
-            self.last_move = None
-            self.last_captured_dots = []
-            self.capture_happened = False
-            self.debug = self._empty_debug()
-            self.message = "New game ready. Player 1 to move."
-            return self._state_unlocked()
+            self._version += 1
+            published = deepcopy(snapshot)
+            published["version"] = self._version
+            self._snapshot = published
+            return deepcopy(published)
 
-    def state(self):
+    def read(self):
+        """Return an independent copy of the latest snapshot, if available."""
         with self._lock:
-            return self._state_unlocked()
+            return deepcopy(self._snapshot)
 
-    def _state_unlocked(self):
-        legal_moves = self.game.legal_moves()
-        return {
-            "rows": int(self.game.board.shape[0]),
-            "cols": int(self.game.board.shape[1]),
-            "board": self.game.board.tolist(),
-            "territory": self.game.territory.tolist(),
-            "score": {
-                "player_1": int(self.game.score[PLAYER_1]),
-                "player_2": int(self.game.score[PLAYER_2]),
-            },
-            "current_player": int(self.current_player),
-            "last_move": (
-                _coordinates([self.last_move])[0] if self.last_move else None
-            ),
-            "legal_moves": _coordinates(legal_moves),
-            "legal_move_count": len(legal_moves),
-            "move_number": self.move_number,
-            "last_captured_dots": _coordinates(self.last_captured_dots),
-            "capture_happened": self.capture_happened,
-            "debug": self.debug,
-            "message": self.message,
-        }
 
-    def apply_move(self, row, col):
-        with self._lock:
-            if not self.game.is_legal_move(row, col):
-                self.message = f"Illegal move at ({row}, {col})."
-                return False, self._state_unlocked()
+snapshot_store = SnapshotStore()
 
-            moving_player = self.current_player
-            player_label = "Player 1" if moving_player == PLAYER_1 else "Player 2"
 
-            # Preserve the exact pre-move inputs used by the engine's cycle
-            # check so the same helpers can also produce read-only diagnostics.
-            pre_move_groups = self.game.groups
-            pre_move_territory = self.game.territory.copy()
-            last_move = (row, col)
-            diagnostic_board = self.game.board.copy()
-            diagnostic_board[last_move] = moving_player
+def publish_state(game, last_move, move_number, message):
+    """Serialize an MCTS-owned game and publish it for read-only display."""
+    legal_moves = game.get_legal_actions()
+    winner = game.game_result
+    captured_dots = list(game.last_captured_dots)
 
-            could_have_closed_loop_result = could_have_closed_loop(
-                diagnostic_board,
-                pre_move_territory,
-                last_move,
-                moving_player,
-                groups=pre_move_groups,
-            )
-            candidate_regions = find_candidate_regions(
-                diagnostic_board,
-                pre_move_territory,
-                last_move,
-                moving_player,
-            )
-            capture_info = detect_capture_info(
-                diagnostic_board,
-                last_move,
-                moving_player,
-                territory=pre_move_territory,
-                groups=pre_move_groups,
-            )
-
-            captured_dots = self.game.place_dot(row, col, moving_player)
-
-            self.move_number += 1
-            self.last_move = last_move
-            self.last_captured_dots = list(captured_dots)
-            self.capture_happened = bool(captured_dots)
-            self.current_player = opponent_of(moving_player)
-            next_player_label = (
-                "Player 1" if self.current_player == PLAYER_1 else "Player 2"
-            )
-
-            captured_regions = list(capture_info.captured_regions)
-            self.debug = {
-                "could_have_closed_loop": could_have_closed_loop_result,
-                # The existing helper returns flood-fill seeds around last_move.
-                "candidate_region_count": len(candidate_regions),
-                "candidate_regions": _coordinates(candidate_regions),
-                "enclosed_region_count": len(captured_regions),
-                "detected_enclosed_regions": _regions(captured_regions),
-                "opponent_cells_found": _coordinates(capture_info.captured_dots),
-                "capture_happened": capture_info.happened,
-                "captured_dots": _coordinates(capture_info.captured_dots),
-                "captured_regions": _regions(captured_regions),
-            }
-
-            if captured_dots:
-                noun = "dot" if len(captured_dots) == 1 else "dots"
-                self.message = (
-                    f"{player_label} captured {len(captured_dots)} {noun} with "
-                    f"({row}, {col}). {next_player_label} to move."
-                )
-            else:
-                self.message = (
-                    f"{player_label} placed a dot at ({row}, {col}). "
-                    f"{next_player_label} to move."
-                )
-
-            return True, self._state_unlocked()
+    snapshot = {
+        "rows": int(game.board.shape[0]),
+        "cols": int(game.board.shape[1]),
+        "board": game.board.tolist(),
+        "territory": game.territory.tolist(),
+        "score": {
+            "player_1": int(game.score[1]),
+            "player_2": int(game.score[-1]),
+        },
+        "current_player": int(game.next_to_move),
+        "last_move": _coordinates([last_move])[0] if last_move else None,
+        "legal_moves": _coordinates(legal_moves),
+        "legal_move_count": len(legal_moves),
+        "move_number": int(move_number),
+        "last_captured_dots": _coordinates(captured_dots),
+        "capture_happened": bool(captured_dots),
+        "game_over": winner is not None,
+        "winner": int(winner) if winner is not None else None,
+        "message": str(message),
+    }
+    return snapshot_store.publish(snapshot)
 
 
 app = FastAPI(
-    title="Dots GUI API",
-    description="A presentation adapter around the existing DotsGame engine.",
-    version="1.0.0",
+    title="Dots MCTS Display API",
+    description="Read-only snapshots published by the MCTS application.",
+    version="2.0.0",
 )
-session = GameSession()
 
 
 @app.get("/", include_in_schema=False)
@@ -210,20 +99,7 @@ def script():
 
 @app.get("/api/state")
 def get_state():
-    return session.state()
-
-
-@app.post("/api/move")
-def post_move(move: MoveRequest):
-    succeeded, state = session.apply_move(move.row, move.col)
-    if not succeeded:
-        return JSONResponse(
-            status_code=409,
-            content={"error": "Illegal move", "state": state},
-        )
-    return state
-
-
-@app.post("/api/reset")
-def reset_game():
-    return session.reset()
+    snapshot = snapshot_store.read()
+    if snapshot is None:
+        raise HTTPException(status_code=503, detail="No MCTS state published yet")
+    return snapshot

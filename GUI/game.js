@@ -2,6 +2,7 @@
 
 const PLAYER_1 = 1;
 const PLAYER_2 = -1;
+const POLL_INTERVAL_MS = 300;
 
 const canvas = document.querySelector("#game-board");
 const canvasWrap = document.querySelector("#canvas-wrap");
@@ -18,35 +19,18 @@ const elements = {
   legalMoves: document.querySelector("#legal-moves"),
   capturedDots: document.querySelector("#captured-dots"),
   captureHappened: document.querySelector("#capture-happened"),
-  couldCloseLoop: document.querySelector("#could-close-loop"),
-  candidateCount: document.querySelector("#candidate-count"),
-  regionCount: document.querySelector("#region-count"),
-  opponentCells: document.querySelector("#opponent-cells"),
-  candidateRegions: document.querySelector("#candidate-regions"),
-  capturedRegions: document.querySelector("#captured-regions"),
+  gameResult: document.querySelector("#game-result"),
   rawBoard: document.querySelector("#raw-board"),
   rawTerritory: document.querySelector("#raw-territory"),
   status: document.querySelector("#status"),
-  newGame: document.querySelector("#new-game"),
-  resetGame: document.querySelector("#reset-game"),
-  toggleDebug: document.querySelector("#toggle-debug"),
-  debugDetails: document.querySelector("#debug-details"),
-  rawDetails: document.querySelector("#raw-details"),
 };
 
 const view = {
   game: null,
-  legalMoves: new Set(),
-  hoverCell: null,
-  keyboardCell: null,
-  keyboardSelectionActive: false,
+  version: null,
   layout: null,
-  submitting: false,
+  polling: false,
 };
-
-function coordinateKey(row, col) {
-  return `${row},${col}`;
-}
 
 function formatCoordinate(cell) {
   return cell ? `(${cell[0]}, ${cell[1]})` : "—";
@@ -60,91 +44,51 @@ function playerName(player) {
   return player === PLAYER_1 ? "Player 1" : "Player 2";
 }
 
+function resultName(winner) {
+  if (winner === PLAYER_1) return "Player 1 wins";
+  if (winner === PLAYER_2) return "Player 2 wins";
+  return "Draw";
+}
+
 function showStatus(message, isError = false) {
   elements.status.querySelector("p").textContent = message;
   elements.status.classList.toggle("is-error", isError);
 }
 
-function setControlsDisabled(disabled) {
-  view.submitting = disabled;
-  elements.newGame.disabled = disabled;
-  elements.resetGame.disabled = disabled;
-  canvas.setAttribute("aria-busy", String(disabled));
-}
-
-async function requestJSON(path, options = {}) {
-  const response = await fetch(path, {
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+async function requestState() {
+  const response = await fetch("/api/state", { cache: "no-store" });
   const payload = await response.json();
 
   if (!response.ok) {
-    const error = new Error(payload.error || "The game engine rejected the request.");
-    error.state = payload.state;
-    throw error;
+    throw new Error(payload.detail || "The display state is unavailable.");
   }
 
   return payload;
 }
 
-async function loadGame() {
-  try {
-    setGameState(await requestJSON("/api/state"));
-  } catch (error) {
-    elements.loading.textContent = "Could not connect to the game engine.";
-    showStatus("Could not load the game. Check that the FastAPI server is running.", true);
-  }
-}
-
-async function resetGame(label) {
-  if (view.submitting) return;
-  setControlsDisabled(true);
-  showStatus(`${label}…`);
+async function pollState() {
+  if (view.polling) return;
+  view.polling = true;
 
   try {
-    setGameState(await requestJSON("/api/reset", { method: "POST", body: "{}" }));
+    const game = await requestState();
+    if (game.version !== view.version) {
+      setGameState(game);
+    }
   } catch (error) {
-    showStatus("The game could not be reset.", true);
+    if (!view.game) {
+      elements.loading.textContent = "Waiting for main_mcts.py to publish a state…";
+    }
+    showStatus(error.message || "Could not read the MCTS state.", true);
   } finally {
-    setControlsDisabled(false);
-  }
-}
-
-async function submitMove(row, col) {
-  if (view.submitting) return;
-  setControlsDisabled(true);
-  showStatus(`Placing a dot at (${row}, ${col})…`);
-
-  try {
-    const state = await requestJSON("/api/move", {
-      method: "POST",
-      body: JSON.stringify({ row, col }),
-    });
-    setGameState(state);
-  } catch (error) {
-    if (error.state) setGameState(error.state);
-    showStatus(error.message || "Illegal move.", true);
-  } finally {
-    setControlsDisabled(false);
+    view.polling = false;
+    window.setTimeout(pollState, POLL_INTERVAL_MS);
   }
 }
 
 function setGameState(game) {
   view.game = game;
-  view.legalMoves = new Set(
-    game.legal_moves.map(([row, col]) => coordinateKey(row, col)),
-  );
-  view.hoverCell = null;
-
-  if (
-    !view.keyboardCell ||
-    !view.legalMoves.has(coordinateKey(view.keyboardCell[0], view.keyboardCell[1]))
-  ) {
-    view.keyboardCell = game.legal_moves[0] || null;
-  }
-
+  view.version = game.version;
   elements.loading.hidden = true;
   updateInformationPanel();
   resizeAndDrawBoard();
@@ -153,12 +97,18 @@ function setGameState(game) {
 
 function updateInformationPanel() {
   const game = view.game;
-  const debug = game.debug;
-  const name = playerName(game.current_player);
+  const nextPlayer = playerName(game.current_player);
 
   elements.boardTitle.textContent = `${game.rows} × ${game.cols} board`;
-  elements.turnPill.textContent = `${name} to move`;
-  elements.turnPill.className = `turn-pill ${game.current_player === PLAYER_1 ? "player-one" : "player-two"}`;
+  if (game.game_over) {
+    elements.turnPill.textContent = resultName(game.winner);
+    elements.turnPill.className = "turn-pill";
+  } else {
+    elements.turnPill.textContent = `${nextPlayer} searching`;
+    elements.turnPill.className =
+      `turn-pill ${game.current_player === PLAYER_1 ? "player-one" : "player-two"}`;
+  }
+
   elements.scorePlayer1.textContent = game.score.player_1;
   elements.scorePlayer2.textContent = game.score.player_2;
   elements.moveNumber.textContent = game.move_number;
@@ -167,25 +117,18 @@ function updateInformationPanel() {
   elements.capturedDots.textContent = formatCoordinates(game.last_captured_dots);
   elements.captureHappened.textContent = game.capture_happened ? "Yes" : "No";
   elements.captureHappened.classList.toggle("capture-yes", game.capture_happened);
-
-  elements.couldCloseLoop.textContent =
-    debug.could_have_closed_loop === null
-      ? "Not checked"
-      : debug.could_have_closed_loop
-        ? "Yes"
-        : "No";
-  elements.candidateCount.textContent = debug.candidate_region_count;
-  elements.regionCount.textContent = debug.enclosed_region_count;
-  elements.opponentCells.textContent = formatCoordinates(debug.opponent_cells_found);
-  elements.candidateRegions.textContent = JSON.stringify(debug.candidate_regions, null, 2);
-  elements.capturedRegions.textContent = JSON.stringify(debug.detected_enclosed_regions, null, 2);
+  elements.gameResult.textContent = game.game_over
+    ? resultName(game.winner)
+    : "In progress";
   elements.rawBoard.textContent = formatMatrix(game.board);
   elements.rawTerritory.textContent = formatMatrix(game.territory);
 
+  const stateDescription = game.game_over
+    ? resultName(game.winner)
+    : `${nextPlayer} is searching. ${game.legal_move_count} legal moves remain.`;
   canvas.setAttribute(
     "aria-label",
-    `${game.rows} by ${game.cols} Dots board. ${name} to move. ` +
-      `${game.legal_move_count} legal moves remain. Use arrow keys and Enter to place a dot.`,
+    `${game.rows} by ${game.cols} read-only Dots board. ${stateDescription}`,
   );
 }
 
@@ -252,8 +195,6 @@ function drawBoard() {
   context.fillStyle = surface;
   context.fillRect(0, 0, width, height);
 
-  // Territory belongs to intersections in the engine, so each captured cell
-  // is shown as a soft tile centered on its corresponding grid point.
   const territorySize = Math.max(10, step * 0.76);
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
@@ -337,137 +278,10 @@ function drawBoard() {
     context.arc(x, y, dotRadius + 5, 0, Math.PI * 2);
     context.stroke();
   }
-
-  const selectedCell =
-    view.hoverCell ||
-    (view.keyboardSelectionActive && document.activeElement === canvas
-      ? view.keyboardCell
-      : null);
-  if (selectedCell) {
-    const [row, col] = selectedCell;
-    const x = originX + col * step;
-    const y = originY + row * step;
-    context.fillStyle =
-      view.game.current_player === PLAYER_1
-        ? "rgba(182, 93, 80, 0.16)"
-        : "rgba(82, 115, 163, 0.17)";
-    context.strokeStyle = view.game.current_player === PLAYER_1 ? player1 : player2;
-    context.lineWidth = 1.5;
-    context.beginPath();
-    context.arc(x, y, dotRadius + 5, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
-  }
 }
-
-// Canvas coordinates are mapped to the nearest grid intersection; the legal
-// move list still comes exclusively from the Python engine.
-function eventToCell(event) {
-  if (!view.layout || !view.game) return null;
-  const bounds = canvas.getBoundingClientRect();
-  const x = event.clientX - bounds.left;
-  const y = event.clientY - bounds.top;
-  const { originX, originY, step } = view.layout;
-  const col = Math.round((x - originX) / step);
-  const row = Math.round((y - originY) / step);
-
-  if (row < 0 || row >= view.game.rows || col < 0 || col >= view.game.cols) {
-    return null;
-  }
-
-  const intersectionX = originX + col * step;
-  const intersectionY = originY + row * step;
-  const hitRadius = Math.max(11, Math.min(20, step * 0.42));
-  if (Math.hypot(x - intersectionX, y - intersectionY) > hitRadius) return null;
-  return [row, col];
-}
-
-canvas.addEventListener("pointermove", (event) => {
-  view.keyboardSelectionActive = false;
-  const cell = eventToCell(event);
-  const isLegal = cell && view.legalMoves.has(coordinateKey(cell[0], cell[1]));
-  view.hoverCell = isLegal ? cell : null;
-  canvas.classList.toggle("is-actionable", Boolean(isLegal));
-  drawBoard();
-});
-
-canvas.addEventListener("pointerdown", () => {
-  view.keyboardSelectionActive = false;
-  drawBoard();
-});
-
-canvas.addEventListener("pointerleave", () => {
-  view.hoverCell = null;
-  canvas.classList.remove("is-actionable");
-  drawBoard();
-});
-
-canvas.addEventListener("click", (event) => {
-  const cell = eventToCell(event);
-  if (!cell || !view.legalMoves.has(coordinateKey(cell[0], cell[1]))) return;
-  submitMove(cell[0], cell[1]);
-});
-
-canvas.addEventListener("keydown", (event) => {
-  if (!view.game || !view.keyboardCell) return;
-  const directions = {
-    ArrowUp: [-1, 0],
-    ArrowDown: [1, 0],
-    ArrowLeft: [0, -1],
-    ArrowRight: [0, 1],
-  };
-
-  if (event.key in directions) {
-    event.preventDefault();
-    view.keyboardSelectionActive = true;
-    const [rowDelta, colDelta] = directions[event.key];
-    const row = Math.max(0, Math.min(view.game.rows - 1, view.keyboardCell[0] + rowDelta));
-    const col = Math.max(0, Math.min(view.game.cols - 1, view.keyboardCell[1] + colDelta));
-    view.keyboardCell = [row, col];
-    drawBoard();
-  }
-
-  if (event.key === "Enter" || event.key === " ") {
-    event.preventDefault();
-    view.keyboardSelectionActive = true;
-    const [row, col] = view.keyboardCell;
-    if (view.legalMoves.has(coordinateKey(row, col))) {
-      submitMove(row, col);
-    } else {
-      showStatus(`Intersection (${row}, ${col}) is not available.`, true);
-    }
-  }
-});
-
-canvas.addEventListener("focus", drawBoard);
-canvas.addEventListener("blur", () => {
-  view.keyboardSelectionActive = false;
-  drawBoard();
-});
-
-elements.newGame.addEventListener("click", () => resetGame("Starting a new game"));
-elements.resetGame.addEventListener("click", () => resetGame("Resetting the game"));
-
-elements.toggleDebug.addEventListener("click", () => {
-  const panels = [elements.debugDetails, elements.rawDetails];
-  const shouldOpen = !panels.some((panel) => panel.open);
-  panels.forEach((panel) => {
-    panel.open = shouldOpen;
-  });
-  elements.toggleDebug.textContent = shouldOpen ? "Hide debug" : "Show debug";
-  elements.toggleDebug.setAttribute("aria-pressed", String(shouldOpen));
-});
-
-[elements.debugDetails, elements.rawDetails].forEach((panel) => {
-  panel.addEventListener("toggle", () => {
-    const anyOpen = elements.debugDetails.open || elements.rawDetails.open;
-    elements.toggleDebug.textContent = anyOpen ? "Hide debug" : "Show debug";
-    elements.toggleDebug.setAttribute("aria-pressed", String(anyOpen));
-  });
-});
 
 const resizeObserver = new ResizeObserver(resizeAndDrawBoard);
 resizeObserver.observe(canvasWrap);
 window.addEventListener("resize", resizeAndDrawBoard);
 
-loadGame();
+pollState();
