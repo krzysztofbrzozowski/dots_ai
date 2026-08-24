@@ -21,20 +21,20 @@ def move_message(game, action, moving_player):
     """Describe an MCTS-selected move for the GUI status area."""
     row, col = action
     captured_count = len(game.last_captured_dots)
-    capture_text = (
-        f" and captured {captured_count} dot"
-        f"{'s' if captured_count != 1 else ''}"
-        if captured_count
-        else ""
-    )
+    message = f"{player_label(moving_player)} selected ({row}, {col})"
+
+    if captured_count:
+        capturing_player = game.last_capture_player
+        noun = "dot" if captured_count == 1 else "dots"
+        if capturing_player == moving_player:
+            message += f" and captured {captured_count} {noun}"
+        else:
+            message += (
+                f". {player_label(capturing_player)} captured "
+                f"{captured_count} trapped {noun}"
+            )
 
     if game.game_result is not None:
-        return (
-            f"{player_label(moving_player)} selected ({row}, {col})"
-            f"{capture_text}. Game over: {result_label(game.game_result)}."
-        )
+        return f"{message}. Game over: {result_label(game.game_result)}."
 
-    return (
-        f"{player_label(moving_player)} selected ({row}, {col})"
-        f"{capture_text}. {player_label(game.next_to_move)} is searching."
-    )
+    return f"{message}. {player_label(game.next_to_move)} is searching."

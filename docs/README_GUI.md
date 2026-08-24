@@ -123,6 +123,7 @@ Example final response:
   "move_number": 4,
   "last_captured_dots": [],
   "capture_happened": false,
+  "capture_player": null,
   "game_over": true,
   "winner": 0,
   "message": "Player 2 selected (0, 0). Game over: Draw."

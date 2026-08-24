@@ -3,13 +3,13 @@
 import numpy as np
 
 try:  # Support package and direct imports
-    from .board import EMPTY, PLAYER_1, PLAYER_2, PLAYERS, get_neighbors
-    from .capture import detect_capture_info
+    from .board import EMPTY, PLAYER_1, PLAYER_2, PLAYERS, get_neighbors, opponent_of
+    from .capture import detect_capture_info, detect_surrounded_move_info
     from .groups import UnionFind, rebuild_groups
     from .rendering import render_board
 except ImportError:  # pragma: no cover - exercised by the direct test runner
-    from board import EMPTY, PLAYER_1, PLAYER_2, PLAYERS, get_neighbors
-    from capture import detect_capture_info
+    from board import EMPTY, PLAYER_1, PLAYER_2, PLAYERS, get_neighbors, opponent_of
+    from capture import detect_capture_info, detect_surrounded_move_info
     from groups import UnionFind, rebuild_groups
     from rendering import render_board
 
@@ -48,6 +48,7 @@ class DotsGame:
         self.next_to_move = PLAYER_1
         self.last_move = None
         self.last_captured_dots = []
+        self.last_capture_player = None
 
     def is_legal_move(self, row, col):
         """Return True when a dot may be placed at ``(row, col)``"""
@@ -87,6 +88,7 @@ class DotsGame:
         copied.next_to_move = self.next_to_move
         copied.last_move = self.last_move
         copied.last_captured_dots = list(self.last_captured_dots)
+        copied.last_capture_player = self.last_capture_player
         return copied
 
     def move(self, action):
@@ -262,9 +264,34 @@ class DotsGame:
             # participate in active connected groups
             self.groups = rebuild_groups(self.board, self.territory)
 
+        # A loop may have been completed earlier while empty. If this move was
+        # placed inside such an opponent enclosure, it is captured immediately.
+        surrounded_move = detect_surrounded_move_info(
+            self.board,
+            last_move,
+            player,
+            territory=self.territory,
+        )
+        surrounding_player = opponent_of(player)
+
+        if surrounded_move.happened:
+            for region in surrounded_move.captured_regions:
+                for cell in region:
+                    if self.territory[cell] == EMPTY:
+                        self.territory[cell] = surrounding_player
+
+            self.score[surrounding_player] += len(surrounded_move.captured_dots)
+            self.groups = rebuild_groups(self.board, self.territory)
+
         captured_dots = list(capture.captured_dots)
+        surrounded_dots = list(surrounded_move.captured_dots)
         self.last_move = last_move
-        self.last_captured_dots = captured_dots
+        if surrounded_dots:
+            self.last_captured_dots = surrounded_dots
+            self.last_capture_player = surrounding_player
+        else:
+            self.last_captured_dots = captured_dots
+            self.last_capture_player = player if captured_dots else None
         return captured_dots
 
     def render(self, colorize=False):

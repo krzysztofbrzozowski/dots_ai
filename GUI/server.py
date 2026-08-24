@@ -68,6 +68,11 @@ def publish_state(game, last_move, move_number, message):
         "move_number": int(move_number),
         "last_captured_dots": _coordinates(captured_dots),
         "capture_happened": bool(captured_dots),
+        "capture_player": (
+            int(game.last_capture_player)
+            if game.last_capture_player is not None
+            else None
+        ),
         "game_over": winner is not None,
         "winner": int(winner) if winner is not None else None,
         "message": str(message),

@@ -13,6 +13,7 @@ from enclosure import (
     UnionFind,
     _could_have_closed_loop,
     detect_capture,
+    detect_surrounded_move_info,
     find_candidate_regions,
     find_enclosed_regions,
     flood_fill_region,
@@ -250,6 +251,86 @@ def test_empty_loop_is_not_capture():
     assert find_enclosed_regions(board, territory, (1, 2), PLAYER_1) == []
 
 
+def test_dot_entering_an_existing_empty_enclosure_is_captured():
+    game = DotsGame(5, 5)
+    center = (2, 2)
+    diamond = [(1, 2), (2, 1), (2, 3), (3, 2)]
+
+    for cell in diamond:
+        assert game.place_dot(*cell, PLAYER_1) == []
+
+    # The empty loop remains unclaimed and may still be entered.
+    assert game.territory[center] == EMPTY
+    assert game.is_legal_move(*center)
+
+    # Entering it triggers a capture by the player who owns the old boundary.
+    assert game.place_dot(*center, PLAYER_2) == []
+    assert game.board[center] == PLAYER_2
+    assert game.territory[center] == PLAYER_1
+    assert game.score[PLAYER_1] == 1
+    assert game.score[PLAYER_2] == 0
+    assert game.last_captured_dots == [center]
+    assert game.last_capture_player == PLAYER_1
+    assert center not in game.groups
+
+
+def test_surrounded_move_diagnostic_finds_the_entering_dot():
+    center = (2, 2)
+    board = _board(
+        5,
+        5,
+        [
+            (PLAYER_1, (1, 2)),
+            (PLAYER_1, (2, 1)),
+            (PLAYER_1, (2, 3)),
+            (PLAYER_1, (3, 2)),
+            (PLAYER_2, center),
+        ],
+    )
+
+    capture = detect_surrounded_move_info(board, center, PLAYER_2)
+
+    assert capture.captured_dots == (center,)
+    assert capture.captured_regions == ((center,),)
+
+
+def test_inactive_boundary_dots_do_not_capture_an_entering_opponent():
+    game = DotsGame(5, 5)
+    center = (2, 2)
+    diamond = [(1, 2), (2, 1), (2, 3), (3, 2)]
+    inactive_boundary = [(1, 2), (2, 3)]
+
+    for cell in diamond:
+        assert game.place_dot(*cell, PLAYER_1) == []
+
+    # Captured dots stay visible, but they are no longer active enclosure walls.
+    for cell in inactive_boundary:
+        game.territory[cell] = PLAYER_2
+    game.groups = rebuild_groups(game.board, game.territory)
+
+    assert game.place_dot(*center, PLAYER_2) == []
+    assert game.board[center] == PLAYER_2
+    assert game.territory[center] == EMPTY
+    assert game.score[PLAYER_1] == 0
+    assert game.last_captured_dots == []
+    assert game.last_capture_player is None
+    assert all(game.board[cell] == PLAYER_1 for cell in inactive_boundary)
+
+
+def test_dot_entering_an_open_shape_is_not_captured():
+    game = DotsGame(5, 5)
+    center = (2, 2)
+
+    for cell in [(1, 2), (2, 1), (2, 3)]:
+        assert game.place_dot(*cell, PLAYER_1) == []
+
+    assert game.place_dot(*center, PLAYER_2) == []
+    assert game.territory[center] == EMPTY
+    assert game.score[PLAYER_1] == 0
+    assert game.last_captured_dots == []
+    assert game.last_capture_player is None
+
+
 def test_square_enclosure_captures_one():
     ring = [
         (row, col)
@@ -371,6 +452,82 @@ def test_existing_territory_does_not_complete_active_dot_wall():
         PLAYER_1,
         territory=territory,
     ) == []
+
+
+def test_visible_inactive_dot_opens_an_otherwise_closed_region():
+    ring = [
+        (row, col)
+        for row in range(5)
+        for col in range(5)
+        if row in (0, 4) or col in (0, 4)
+    ]
+    last_move = (0, 3)
+    inactive_wall = (0, 1)
+    opponent_dot = (2, 2)
+    board = _board(
+        5,
+        5,
+        [(PLAYER_1, cell) for cell in ring]
+        + [(PLAYER_2, opponent_dot)],
+    )
+    territory = _territory(5, 5)
+    territory[inactive_wall] = PLAYER_2
+    visited = np.zeros(board.shape, dtype=bool)
+
+    # The active graph still has a cycle candidate, so flood-fill geometry is
+    # responsible for rejecting this apparent enclosure.
+    assert _could_have_closed_loop(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+    )
+    region, reaches_edge, opponent_cells = flood_fill_region(
+        board,
+        opponent_dot,
+        PLAYER_1,
+        visited,
+        territory=territory,
+    )
+
+    assert inactive_wall in region
+    assert reaches_edge is True
+    assert opponent_cells == [opponent_dot]
+    assert find_enclosed_regions(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+    ) == []
+    assert detect_capture(
+        board,
+        last_move,
+        PLAYER_1,
+        territory=territory,
+    ) == []
+    assert board[inactive_wall] == PLAYER_1
+
+
+def test_inactive_same_player_neighbor_is_a_flood_fill_candidate():
+    last_move = (2, 2)
+    inactive_neighbor = (2, 3)
+    board = _board(
+        5,
+        5,
+        [
+            (PLAYER_1, last_move),
+            (PLAYER_1, inactive_neighbor),
+        ],
+    )
+    territory = _territory(5, 5)
+    territory[inactive_neighbor] = PLAYER_2
+
+    assert inactive_neighbor in find_candidate_regions(
+        board,
+        territory,
+        last_move,
+        PLAYER_1,
+    )
 
 
 def test_previously_captured_opponent_dot_is_not_reported_again():

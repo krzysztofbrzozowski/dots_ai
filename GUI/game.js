@@ -19,6 +19,7 @@ const elements = {
   legalMoves: document.querySelector("#legal-moves"),
   capturedDots: document.querySelector("#captured-dots"),
   captureHappened: document.querySelector("#capture-happened"),
+  capturePlayer: document.querySelector("#capture-player"),
   gameResult: document.querySelector("#game-result"),
   rawBoard: document.querySelector("#raw-board"),
   rawTerritory: document.querySelector("#raw-territory"),
@@ -117,6 +118,9 @@ function updateInformationPanel() {
   elements.capturedDots.textContent = formatCoordinates(game.last_captured_dots);
   elements.captureHappened.textContent = game.capture_happened ? "Yes" : "No";
   elements.captureHappened.classList.toggle("capture-yes", game.capture_happened);
+  elements.capturePlayer.textContent = game.capture_happened
+    ? playerName(game.capture_player)
+    : "None";
   elements.gameResult.textContent = game.game_over
     ? resultName(game.winner)
     : "In progress";

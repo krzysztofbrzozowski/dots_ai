@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from GUI.presentation import move_message
 from GUI.server import SnapshotStore, app, publish_state, snapshot_store
 from game.enclosure import EMPTY, PLAYER_1, PLAYER_2, DotsGame
 from main_mcts import run_mcts_game
@@ -104,6 +105,26 @@ def test_published_snapshot_is_serialized_and_isolated():
     assert stored["legal_moves"] == [[0, 0], [0, 1], [1, 0], [1, 1]]
     assert stored["game_over"] is False
     assert stored["winner"] is None
+    assert stored["capture_player"] is None
+
+
+def test_snapshot_and_message_credit_a_surrounded_move_to_the_opponent():
+    game = DotsGame(5, 5)
+    center = (2, 2)
+    for cell in [(1, 2), (2, 1), (2, 3), (3, 2)]:
+        game.place_dot(*cell, PLAYER_1)
+    game.place_dot(*center, PLAYER_2)
+
+    published = publish_state(
+        game,
+        last_move=center,
+        move_number=5,
+        message=move_message(game, center, PLAYER_2),
+    )
+
+    assert published["capture_player"] == PLAYER_1
+    assert published["last_captured_dots"] == [[2, 2]]
+    assert "Player 1 captured 1 trapped dot" in published["message"]
 
 
 def test_snapshot_store_is_thread_safe_and_versions_every_publish():

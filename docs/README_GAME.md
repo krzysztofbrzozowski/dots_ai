@@ -54,6 +54,12 @@ if capture happened
     ├── update territory
     ├── update score
     └── rebuild active UnionFind groups
+    ↓
+detect_surrounded_move_info()
+    ↓
+did last_move enter an existing opponent enclosure?
+    ├── no  → finish the move
+    └── yes → give the region and trapped dots to the opponent
 ```
 
 The `board` has already been updated when capture detection runs, but the
@@ -88,6 +94,7 @@ state
 | `self.next_to_move` | `PLAYER_1` | Stores the turn as part of an MCTS state |
 | `self.last_move` | `None` | Stores the most recently applied coordinate |
 | `self.last_captured_dots` | `[]` | Stores captures produced by the latest move |
+| `self.last_capture_player` | `None` | Stores which player received the latest capture |
 
 The main temporary name used during a move is `last_move`
 It is the `(row, col)` coordinate just written to the board and is the move that
@@ -134,10 +141,11 @@ The renderer displays that state approximately as
 The symbols are only presentation
 Internally, the algorithms use the integer values
 
-The board is also the source of truth for enclosure geometry
-During a capture check for `player`, a cell for which
-`board[cell] == player` is a wall
-Empty cells and opponent dots are traversable by flood fill
+The board and territory together determine enclosure geometry
+During a capture check for `player`, a cell is a wall only when
+`board[cell] == player` and `territory[cell] == EMPTY`
+Empty cells, opponent dots, and captured inactive dots are traversable by flood
+fill
 
 # Territory state
 
@@ -188,28 +196,25 @@ Territory is used for game-state decisions
 
 - Captured empty cells render as `×`
 
-Territory is not used as a flood-fill wall
-`flood_fill_region()` does not receive a territory array at all
-Flood fill can traverse a cell even when that cell has previously captured
-territory, provided the board cell is not a current-player dot
+Territory ownership is not itself a flood-fill wall
+`flood_fill_region()` receives territory so it can distinguish active dots from
+visible captured dots
+A nonempty territory cell is traversable even when `board` still contains the
+current player's captured dot there
 
 The resulting distinction is
 
 ```text
-board
-    determines enclosure geometry
+board + territory
+    determine whether a visible player dot is an active enclosure wall
 
 territory
     stores capture ownership, move availability, scoring state,
     and whether dots are active
 ```
 
-One subtle consequence follows directly from the current code
-A current-player dot that remains visible on `board` satisfies
-`board[cell] == player` and is therefore still a geometric wall, even if its
-territory is nonempty
-It is inactive for UnionFind, but the flood-fill function does not inspect that
-active state
+This prevents a captured dot from being reused as part of a later enclosure
+boundary
 
 # Active vs inactive dots
 
@@ -246,6 +251,8 @@ the same rule
 board[neighbor] == player
 and territory[neighbor] == EMPTY
 ```
+
+Flood-fill wall detection uses that same active-dot rule
 
 Therefore, a path that looks connected on `board` does not count as an active
 graph path if it depends on captured dots
@@ -793,21 +800,19 @@ seed  →  last_move  ←  seed
 
 Board edges may reduce the number of available neighbors
 
-If a neighboring cell contains the current player's dot, it is a wall and is
-not returned as a seed
+If a neighboring cell contains an active current-player dot, it is a wall and
+is not returned as a seed
 Every other orthogonal neighbor is a candidate, including empty cells,
-opponent dots, and cells with existing territory
-
-Although `find_candidate_regions()` retains a `territory` parameter for API
-compatibility, it does not use territory to filter the seeds
+opponent dots, and inactive visible dots with existing territory
 
 The seeds are local to `last_move` because the capture pipeline is looking for
 regions whose boundary may include that newly placed dot
 
 # `flood_fill_region()`
 
-`flood_fill_region(board, seed, player, visited)` explores one connected region
-of cells that are not current-player dots
+`flood_fill_region(board, seed, player, visited, territory=None)` explores one
+connected region of cells that are not active current-player dots
+When territory is omitted, an empty map is assumed for backward compatibility
 
 It returns three values
 
@@ -849,7 +854,7 @@ This prevents the same cell from being added several times
 
 If the seed is already visited, the function immediately returns empty result
 lists and `False` for `reaches_edge`
-It does the same when the seed itself is a current-player wall
+It does the same when the seed itself is an active current-player wall
 
 For every popped cell, the function
 
@@ -865,14 +870,15 @@ Flood fill cannot continue through
 
 - A coordinate already marked in `visited`
 
-- A cell where `board[cell] == player`
+- A cell where `board[cell] == player` and `territory[cell] == EMPTY`
 
 Opponent dots are not walls
 They are added to both `region` and `opponent_cells`, and the search may continue
 through them
 
-Empty cells are also traversable
-Territory is not checked and is therefore not a wall
+Empty cells and inactive captured dots are also traversable
+Territory ownership is not a wall by itself; it only makes a visible dot
+inactive
 
 ## Walkthrough
 
@@ -1291,9 +1297,9 @@ the tree-search algorithm itself remains in the separate `mcts` package
 
 - Flood-fill connectivity is four-directional
 
-- During flood fill, `board[cell] == player` is the only wall condition
+- During flood fill, a wall requires `board[cell] == player` and empty territory
 
-- Territory does not act as a flood-fill wall
+- Territory ownership does not act as a wall, and captured dots are traversable
 
 - Opponent dots are traversable and are collected during flood fill
 
@@ -1306,6 +1312,9 @@ the tree-search algorithm itself remains in the separate `mcts` package
 - `last_move` is central to cycle checking and candidate seed selection
 
 - Empty enclosed regions are not captures under the current rules
+
+- A dot later placed inside an existing empty opponent enclosure is captured
+  immediately; this check does not require the entering move to create a cycle
 
 - Already captured opponent dots are not scored again
 
@@ -1333,8 +1342,9 @@ This table is a compact reference after the conceptual explanation above
 | `DotsGame.place_dot(row, col, player)` | Apply one move, detect and apply capture, update groups and score | Coordinate and player | `list` of newly captured opponent coordinates |
 | `_could_have_closed_loop(board, territory, last_move, player, groups=None)` | Check whether `last_move` created an active graph cycle candidate | Post-move board, territory, move, player, optional pre-move groups | `bool` |
 | `find_candidate_regions(board, territory, last_move, player)` | Find orthogonal non-player flood-fill seeds around `last_move` | Board state and move context | `list` of seed coordinates |
-| `flood_fill_region(board, seed, player, visited)` | Explore one four-connected non-player region | Board, seed, moving player, shared visited array | `(region, reaches_edge, opponent_cells)` |
+| `flood_fill_region(board, seed, player, visited, territory=None)` | Explore one four-connected region around active player walls | Board, seed, moving player, shared visited array, optional territory | `(region, reaches_edge, opponent_cells)` |
 | `find_enclosed_regions(board, territory, last_move, player)` | Flood-fill candidate regions and retain enclosed regions containing opponents | Board state and move context | `list` of `(region, opponent_cells)` pairs |
+| `detect_surrounded_move_info(board, last_move, player, territory=None)` | Check whether a newly placed dot entered an existing opponent enclosure | Post-move board, move, moving player, optional territory | `CaptureInfo` |
 | `detect_capture_info(board, last_move, player, territory=None, groups=None)` | Run validation, cycle pre-check, geometry, and duplicate-score filtering | Post-move board and optional game state | `CaptureInfo` |
 | `detect_capture(board, last_move, player, territory=None, groups=None)` | Provide the simpler compatibility wrapper | Same capture inputs | `list` of captured opponent coordinates |
 | `render_board(board, territory=None, colorize=False)` | Render dots and captured empty cells without mutating state | Board, optional territory, color choice | Multiline string |
