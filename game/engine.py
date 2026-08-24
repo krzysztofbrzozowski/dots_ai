@@ -69,6 +69,24 @@ class DotsGame:
         )
         return [tuple(cell) for cell in legal]
 
+    @property
+    def game_result(self):
+        # Game is still in progress
+        if self.legal_moves():
+            return None
+
+        # No legal moves -> determine winner
+        if self.score[PLAYER_1] > self.score[PLAYER_2]:
+            return PLAYER_1
+
+        if self.score[PLAYER_2] > self.score[PLAYER_1]:
+            return PLAYER_2
+
+        return 0  # draw
+
+    def is_game_over(self):
+        return self.game_result is not None
+
     # Place a new dot and update capture / connectivity state
     #
     # Flow:
@@ -203,6 +221,7 @@ class DotsGame:
             self.groups = rebuild_groups(self.board, self.territory)
 
         return list(capture.captured_dots)
+        
 
     def render(self, colorize=False):
         """Render this game board"""
