@@ -203,7 +203,7 @@ Authoritative game/search process
 
 For every batch, `MonteCarloTreeSearch`:
 
-1. Selects up to `parallelism` leaves.
+1. Selects up to `rollout_batch_size` leaves.
 2. Reserves every selected path with a temporary virtual loss.
 3. Submits only each leaf's `DotsGame` state and a unique random seed.
 4. Waits for the rollout results.
@@ -262,6 +262,26 @@ best_node = search.best_action(total_simulation_seconds=30)
 The search starts batches until the deadline is reached. An in-flight final
 batch is allowed to finish, so elapsed time can exceed the requested duration
 by approximately one rollout batch.
+
+### Search statistics
+
+After a successful `best_action()` call, `last_search_stats` contains metrics
+for that search without changing the method's best-node return value:
+
+```python
+best_node = search.best_action(total_simulation_seconds=30)
+stats = search.last_search_stats
+
+print(stats.completed_rollouts)
+print(stats.completed_batches)
+print(stats.elapsed_seconds)
+print(stats.rollouts_per_second)
+```
+
+`completed_rollouts` counts only simulations that finished successfully.
+`completed_batches` counts executor batches and is zero for sequential search.
+`elapsed_seconds` measures the complete search loop, including an in-flight
+final batch that finishes after a wall-clock deadline.
 
 The application currently uses a 30-second time budget for every real move:
 

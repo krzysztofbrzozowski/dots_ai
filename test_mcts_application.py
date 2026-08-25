@@ -2,6 +2,7 @@
 
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Thread
+from unittest.mock import patch
 
 import numpy as np
 
@@ -121,20 +122,58 @@ def test_parallel_search_batches_exact_simulation_count():
     executor = ImmediateExecutor()
     root = TwoPlayerMCTSNode(DotsGame(3, 3))
 
-    best = MonteCarloTreeSearch(
+    search = MonteCarloTreeSearch(
         root,
         rollout_executor=executor,
-        parallelism=3,
+        rollout_batch_size=3,
         random_seed=123,
-    ).best_action(simulations_number=10)
+    )
+    best = search.best_action(simulations_number=10)
 
     seeds = [args[1] for _, args in executor.submissions]
+    stats = search.last_search_stats
     assert len(executor.submissions) == 10
     assert len(set(seeds)) == 10
     assert root.n == 10
     assert sum(child.n for child in root.children) == 10
     assert best.action in DotsGame(3, 3).get_legal_actions()
     assert all(node.virtual_visits == 0 for node in walk_nodes(root))
+    assert stats.completed_rollouts == 10
+    assert stats.completed_batches == 4
+    assert stats.elapsed_seconds >= 0
+    assert stats.rollouts_per_second >= 0
+
+
+def test_sequential_search_records_completed_rollouts_without_batches():
+    search = MonteCarloTreeSearch(TwoPlayerMCTSNode(DotsGame(2, 2)))
+
+    search.best_action(simulations_number=3)
+
+    stats = search.last_search_stats
+    assert stats.completed_rollouts == 3
+    assert stats.completed_batches == 0
+    assert stats.elapsed_seconds >= 0
+
+
+def test_time_based_parallel_search_records_completed_batch_statistics():
+    executor = ImmediateExecutor()
+    root = TwoPlayerMCTSNode(DotsGame(1, 2))
+    search = MonteCarloTreeSearch(
+        root,
+        rollout_executor=executor,
+        rollout_batch_size=2,
+        random_seed=789,
+    )
+
+    clock_values = [100.0, 100.0, 100.0, 100.3, 100.3]
+    with patch("mcts.search.time.monotonic", side_effect=clock_values):
+        search.best_action(total_simulation_seconds=0.25)
+
+    stats = search.last_search_stats
+    assert stats.completed_rollouts == 2
+    assert stats.completed_batches == 1
+    assert abs(stats.elapsed_seconds - 0.3) < 1e-9
+    assert abs(stats.rollouts_per_second - (2 / 0.3)) < 1e-9
 
 
 def test_virtual_loss_spreads_a_batch_across_equivalent_children():
@@ -144,7 +183,7 @@ def test_virtual_loss_spreads_a_batch_across_equivalent_children():
     MonteCarloTreeSearch(
         root,
         rollout_executor=executor,
-        parallelism=2,
+        rollout_batch_size=2,
         random_seed=456,
     ).best_action(simulations_number=4)
 
@@ -157,7 +196,7 @@ def test_parallel_search_releases_reservations_after_worker_failure():
     search = MonteCarloTreeSearch(
         root,
         rollout_executor=executor,
-        parallelism=3,
+        rollout_batch_size=3,
     )
 
     try:
@@ -171,9 +210,12 @@ def test_parallel_search_releases_reservations_after_worker_failure():
     assert all(node.virtual_visits == 0 for node in walk_nodes(root))
 
 
-def test_parallel_search_requires_an_executor_for_multiple_workers():
+def test_parallel_search_requires_an_executor_for_multiple_rollouts_per_batch():
     try:
-        MonteCarloTreeSearch(TwoPlayerMCTSNode(DotsGame(2, 2)), parallelism=2)
+        MonteCarloTreeSearch(
+            TwoPlayerMCTSNode(DotsGame(2, 2)),
+            rollout_batch_size=2,
+        )
     except ValueError as error:
         assert "requires a rollout executor" in str(error)
     else:

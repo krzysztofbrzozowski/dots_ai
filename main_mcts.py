@@ -31,7 +31,7 @@ def run_mcts_game(
     publisher=publish_state,
     simulation_seconds=SIMULATION_SECONDS,
     rollout_executor=None,
-    parallelism=1,
+    rollout_batch_size=1,
 ):
     """Own and run the complete game loop, publishing after every MCTS move."""
     if simulations_number <= 0:
@@ -46,19 +46,27 @@ def run_mcts_game(
     while board_state.game_result is None:
         moving_player = board_state.next_to_move
         root = TwoPlayerMCTSNode(state=board_state)
-        # -> 1st option it to run rollouts as sequention -> rollout_executor = None and parallelism = 1
-        # -> 2nd option is to run rollouts in parallel via rollout_executor -> ProcessPoolExecutor
-        # Based on aviablle CPU count, parallel processes of rollout are started
-        # When each process finish, result is backpropagated to the top
+        # Sequential search uses no executor and a rollout batch size of one
+        # Parallel search submits rollout_batch_size tasks to the process pool
+        # The executor worker count determines how many tasks run at the same time
         mcts = MonteCarloTreeSearch(
             root,
             rollout_executor=rollout_executor,
-            parallelism=parallelism,
+            rollout_batch_size=rollout_batch_size,
         )
         if simulation_seconds is None:
             best_node = mcts.best_action(simulations_number=simulations_number)
         else:
             best_node = mcts.best_action(total_simulation_seconds=simulation_seconds)
+
+        stats = mcts.last_search_stats
+        print(
+            f"MCTS move {move_number + 1}: "
+            f"rollouts={stats.completed_rollouts}, "
+            f"elapsed={stats.elapsed_seconds:.2f}s, "
+            f"throughput={stats.rollouts_per_second:.1f} rollouts/s, "
+            f"parallel_batches={stats.completed_batches}"
+        )
 
         if best_node.action is None:
             raise RuntimeError("MCTS returned a node without an action")
@@ -145,7 +153,7 @@ def run_parallel_mcts_game(
             simulation_seconds=simulation_seconds,
             # Passing the ProcessPoolExecutor object to run
             rollout_executor=rollout_executor,
-            parallelism=workers,
+            rollout_batch_size=workers,
         )
 
 
@@ -174,7 +182,7 @@ def main():
     game_thread.start()
 
     # Main thread for the app (displaying the game state)
-    uvicorn.run(app, host=DEFAULT_HOST, port=DEFAULT_PORT)
+    uvicorn.run(app, host=DEFAULT_HOST, port=DEFAULT_PORT, access_log=False)
 
 
 if __name__ == "__main__":
