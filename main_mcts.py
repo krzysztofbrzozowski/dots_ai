@@ -21,7 +21,7 @@ DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 SIMULATION_SECONDS = 30
-DEFAULT_MCTS_WORKERS = os.cpu_count() - 1
+DEFAULT_MCTS_WORKERS = os.cpu_count()
 
 
 def run_mcts_game(
@@ -48,7 +48,8 @@ def run_mcts_game(
         root = TwoPlayerMCTSNode(state=board_state)
         # -> 1st option it to run rollouts as sequention -> rollout_executor = None and parallelism = 1
         # -> 2nd option is to run rollouts in parallel via rollout_executor -> ProcessPoolExecutor
-        # TODO -> description what is going on here
+        # Based on aviablle CPU count, parallel processes of rollout are started
+        # When each process finish, result is backpropagated to the top
         mcts = MonteCarloTreeSearch(
             root,
             rollout_executor=rollout_executor,

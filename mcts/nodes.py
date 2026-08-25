@@ -5,22 +5,32 @@ import numpy as np
 
 
 def rollout_state(state, seed=None):
-    """Play ``state`` to completion without retaining a search-tree node.
+    """Play ``state`` to completion without retaining a search-tree node
 
     This top-level function is intentionally pickleable so a process pool can
     execute CPU-bound rollouts without copying the node's parent tree. A seed
     supplied by the owning search keeps concurrent rollouts independent even
     when worker processes were created from the same parent process.
     """
+    # Assign the child_node.state -> next_state from expand method
     current_rollout_state = state
     rng = None if seed is None else np.random.default_rng(seed)
 
+    # Play the game until a terminal state is reached
     while not current_rollout_state.is_game_over():
+        # Get the legal moves from the state
         possible_moves = current_rollout_state.get_legal_actions()
         if rng is None:
+            # Select a random action index with the global NumPy random generator
             action_index = np.random.randint(len(possible_moves))
+        # If seed provided
         else:
+            # Select a random action index with the rollout generator 
+            # initialized from its seed
+            # Different seeds produce independent random sequences
+            # but may still select the same action
             action_index = rng.integers(len(possible_moves))
+        # Do a move
         current_rollout_state = current_rollout_state.move(
             possible_moves[int(action_index)]
         )
@@ -72,59 +82,57 @@ class MCTSNode(ABC):
     def is_fully_expanded(self):
         return len(self.untried_actions) == 0
 
-    @property
+    @abstractmethod
     def virtual_visits(self):
-        """Number of unfinished rollouts currently reserved through this node."""
-        return self._virtual_visits
+        pass
 
-    @property
+    @abstractmethod
     def effective_n(self):
-        """Visits visible to tree selection, including in-flight rollouts."""
-        return self.n + self.virtual_visits
-
+        pass
+        
+    @abstractmethod
     def reserve_path(self):
-        """Temporarily reserve this node and its ancestors for one rollout."""
-        current_node = self
-        while current_node is not None:
-            current_node._virtual_visits += 1
-            current_node = current_node.parent
-
+        pass
+    
+    @abstractmethod
     def release_path(self):
-        """Release a reservation previously created by :meth:`reserve_path`."""
-        current_node = self
-        while current_node is not None:
-            if current_node._virtual_visits <= 0:
-                raise RuntimeError("cannot release an unreserved MCTS path")
-            current_node._virtual_visits -= 1
-            current_node = current_node.parent
+        pass
 
     def best_child(self, c_param=1.4):
         # c_param controls how strongly MCTS prefers exploration
         # 1.4 is a common default value because it is close to sqrt(2) ≈ 1.414
+        #
         # ---
-        # c.q / c.n
+        # Include unfinished rollouts in the UCT calculation
+        # parent visits = parent n + parent virtual visits
+        # child visits = child n + child virtual visits
+        # child value = child q - child virtual visits
+        #
+        # effective_q (child.q - child.virtual_visits) / child_visits
         #   -> EXPLOITATION - korzystanie z ruchów, które już wyglądają na dobre
         #   -> tells how good this child was in previous simulations
-        #   -> q (wins - loses) / n (number of visits of this child)
-        #   -> gives a hint how good or bad general this child is
+        #   -> effective_q (wins - loses) / n (number of visits of this child)
+        #       gives a hint how good or bad general this child is
+        #   -> BIGGER NUMBER = BETTER
         #
-        # c_param * sqrt(2 * log(self.n) / c.n)
+        # c_param * np.sqrt(2 * np.log(parent_visits) / child_visits)
         #   -> EXPLORATION - sprawdzanie ruchów, które były jeszcze mało testowane 
         #   -> gives extra score to children that were visited less often
-        #   -> np.log(self.n) = number of visits of the parent node
-                # >>> np.log(1)
-                # np.float64(0.0)
-                # >>> np.log(2)
-                # np.float64(0.6931471805599453)
-                # >>> np.log(100)
-                # np.float64(4.605170185988092)
-                # >>> np.log(1000)
-                # np.float64(6.907755278982137)
-                # >>> np.log(10000)
-                # np.float64(9.210340371976184)
-                # >>> np.log(100000)
-                # np.float64(11.512925464970229)
-        #   -> c.n = number of visits of this child
+        #   -> np.log(parent_visits) = number of visits of the parent node
+        #           --- how it is calculated?
+        #           >>> np.log(1)
+        #           np.float64(0.0)
+        #           >>> np.log(2)
+        #           np.float64(0.69)
+        #           >>> np.log(100)
+        #           np.float64(4.60)
+        #           >>> np.log(1000)
+        #           np.float64(6.90)
+        #           >>> np.log(10000)
+        #           np.float64(9.21)
+        #           >>> np.log(100000)
+        #           np.float64(11.51)
+        #   -> IMPORTANT: child_visits = number of visits of this child
         #       odwrotnie proporcjonalny składnik
         #       - dzielenie przez dużą liczbę -> mniejszy wynik końcowy
         #       - dzielenie przez małą liczbę -> wiekszy wynik końcowy
@@ -133,6 +141,8 @@ class MCTSNode(ABC):
         #
         # Final intuition:
         #   good child + not explored enough child can both get selected
+        #
+        # Calculating best child based on current baranch unfinished rollouts
         parent_visits = max(self.effective_n, 1.0)
 
         def choice_weight(child):
@@ -169,7 +179,8 @@ class TwoPlayerMCTSNode(MCTSNode):
             self._untried_actions = list(self.state.get_legal_actions())
             # np.random.shuffle(self._untried_actions)
         return self._untried_actions
-
+        
+    # q -> used only when rollout happen
     @property
     def q(self):
         # For wins:
@@ -183,11 +194,52 @@ class TwoPlayerMCTSNode(MCTSNode):
         wins = self._results[self.parent.state.next_to_move]
         loses = self._results[-1 * self.parent.state.next_to_move]
         return wins - loses
-
+    
+    # -> used only when rollout happen (backpropagation)
     @property
     def n(self):
         return self._number_of_visits
+        
+    @property
+    def virtual_visits(self):
+        """Number of unfinished rollouts currently reserved through this node"""
+        return self._virtual_visits
 
+    @property
+    def effective_n(self):
+        """Visits visible to tree selection, including in-flight rollouts"""
+        # Effective n is used to "discourage" the best child picker in search tree policy e.g. children have exact same values:
+        # A: q=5, n=10
+        # B: q=5, n=10
+        # -> A.reserve_path()
+        # A: q=5, n=10, virtual_visits=1
+        # B: q=5, n=10, virtual_visits=0
+        # -> next _tree_policy
+        #A effective value = (5 - 1) / (10 + 1) = 4/11 ≈ 0.36
+        # B effective value = 5 / 10 = 0.50 <- this will be picked to the work poll
+        # since it is "better" child
+        return self.n + self.virtual_visits
+        
+    def reserve_path(self):
+        """Temporarily reserve this node and its ancestors for one rollout"""
+        current_node = self
+        # Move from the current node through its parents up to the root (top)
+        # Add one virtual visit to each node so parallel rollouts are less likely
+        # to select the same path
+        # The root parent is None which stops the loop
+        while current_node is not None:
+            current_node._virtual_visits += 1
+            current_node = current_node.parent
+
+    def release_path(self):
+        """Release a reservation previously created by :meth:`reserve_path`"""
+        current_node = self
+        while current_node is not None:
+            if current_node._virtual_visits <= 0:
+                raise RuntimeError("cannot release an unreserved MCTS path")
+            current_node._virtual_visits -= 1
+            current_node = current_node.parent
+            
     def expand(self):
         # From possible moves -> get last one / pop -> assign to action
         # e.g. action = x:2 y:2 v:1 -> v (next player to move)
@@ -210,6 +262,16 @@ class TwoPlayerMCTSNode(MCTSNode):
         return self.state.is_game_over()
 
     def rollout(self):
+        # Previously:
+        #   # Assign the child_node.state -> next_state from above methid
+        #   current_rollout_state = self.state
+        #   # Play the game until a terminal state is reached
+        #   # Here is the same logic, move is only done in new object
+        #   while not current_rollout_state.is_game_over():
+        #       possible_moves = current_rollout_state.get_legal_actions()
+        #       action = self.rollout_policy(possible_moves)
+        #       current_rollout_state = current_rollout_state.move(action)
+        #   return current_rollout_state.game_result
         return rollout_state(self.state)
 
     def backpropagate(self, result):
