@@ -1,91 +1,131 @@
-import time
-class MonteCarloTreeSearch(object):
+"""Monte Carlo tree search with optional process-backed leaf rollouts"""
 
-    def __init__(self, node):
+import random
+import time
+
+try:  # Support package and direct imports
+    from .nodes import rollout_state
+except ImportError:  # pragma: no cover - direct module execution
+    from nodes import rollout_state
+
+
+class MonteCarloTreeSearch:
+    """Own an MCTS tree and optionally dispatch rollout batches to an executor.
+
+    Selection, expansion, reservations, and backpropagation always happen in
+    the calling process. Only immutable game states cross the executor boundary,
+    so worker processes never mutate or copy the search tree itself.
+    """
+
+    def __init__(
+        self,
+        node,
+        rollout_executor=None,
+        parallelism=1,
+        random_seed=None,
+    ):
+        if isinstance(parallelism, bool) or not isinstance(parallelism, int):
+            raise TypeError("parallelism must be an integer")
+        if parallelism <= 0:
+            raise ValueError("parallelism must be positive")
+        if rollout_executor is None and parallelism != 1:
+            raise ValueError("parallelism requires a rollout executor")
+
         self.root = node
+        self.rollout_executor = rollout_executor
+        self.parallelism = parallelism
+        self._seed_source = random.Random(random_seed)
 
     def best_action(self, simulations_number=None, total_simulation_seconds=None):
-        if simulations_number is None :
-            assert(total_simulation_seconds is not None)
-            end_time = time.time() + total_simulation_seconds
-            while True:
-                v = self._tree_policy()
-                reward = v.rollout()
-                v.backpropagate(reward)
-                if time.time() > end_time:
-                    break
-        else :
-            for _ in range(0, simulations_number):
-                # Initial state:
-                #   Expand the current tree -> return child node 
-                #     with next_state <- independent game-state (board) object
-                #   Assign it to v for now
-                # Further state:
-                #   -> in 3x3 board only 9 child aviable
-                #   -> later iterations will return self.root.bestchild with c_param 1.4
-                # And end state of choosing best_child
-                v = self._tree_policy()
-                # Initial state:
-                #   For that child node play game until termination happen 
-                #   (some game result)
-                #   reward <- game_result
-                reward = v.rollout()
-                # Initial state:
-                #   For that child node add statistics
-                #   -> increment _number_of_visits +1
-                #   -> for each result (-1 -> O win, 0 -> draw, 1 -> X win)
-                #       increment number of wins
-                #   -> for root also do the same - root contains statistics from all simulations below it
-                # Backpropagation example:
-                # root: visits=30, results={1: 18, -1: 10, 0: 2}
-                # ├─ child_0: visits=10, results={1: 8, -1: 2}
-                # ├─ child_1: visits=5,  results={1: 2, -1: 3}
-                # ├─ child_2: visits=15, results={1: 8, -1: 5, 0: 2}
-                # Each child contains statistics only from simulations that passed through that child
-                v.backpropagate(reward)
-        # to select best child go for exploitation only
-        # After MCTS:
-        #   "Which move looks best based on collected statistics?" -> c_param = 0
-        return self.root.best_child(c_param=0.)
+        """Run the configured search budget and return the best root child"""
+        # Run time based search
+        if simulations_number is None:
+            if total_simulation_seconds is None:
+                raise ValueError("a simulation count or time budget is required")
+            if total_simulation_seconds <= 0:
+                raise ValueError("total_simulation_seconds must be positive")
+            self._search_for_seconds(total_simulation_seconds)
+            
+        # Run iterations number based search
+        else:
+            if isinstance(simulations_number, bool) or not isinstance(
+                simulations_number, int
+            ):
+                raise TypeError("simulations_number must be an integer")
+            if simulations_number <= 0:
+                raise ValueError("simulations_number must be positive")
+            self._search_simulations(simulations_number)
+
+        # Final selection is exploitation-only. All reservations have been
+        # released before this point, so only completed results are considered.
+        return self.root.best_child(c_param=0.0)
+
+    def _search_for_seconds(self, total_simulation_seconds):
+        deadline = time.monotonic() + total_simulation_seconds
+
+        if self.rollout_executor is None:
+            first_simulation = True
+            while first_simulation or time.monotonic() < deadline:
+                self._run_sequential_simulation()
+                first_simulation = False
+            return
+
+        first_batch = True
+        while first_batch or time.monotonic() < deadline:
+            self._run_parallel_batch(self.parallelism)
+            first_batch = False
+
+    def _search_simulations(self, simulations_number):
+        if self.rollout_executor is None:
+            for _ in range(simulations_number):
+                self._run_sequential_simulation()
+            return
+
+        remaining = simulations_number
+        while remaining:
+            batch_size = min(self.parallelism, remaining)
+            self._run_parallel_batch(batch_size)
+            remaining -= batch_size
+
+    def _run_sequential_simulation(self):
+        leaf = self._tree_policy()
+        reward = leaf.rollout()
+        leaf.backpropagate(reward)
+
+    def _run_parallel_batch(self, batch_size):
+        leaves = []
+        futures = []
+
+        try:
+            for _ in range(batch_size):
+                leaf = self._tree_policy()
+                leaf.reserve_path()
+                leaves.append(leaf)
+
+            for leaf in leaves:
+                seed = self._seed_source.getrandbits(128)
+                futures.append(
+                    self.rollout_executor.submit(rollout_state, leaf.state, seed)
+                )
+
+            rewards = [future.result() for future in futures]
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            raise
+        finally:
+            for leaf in leaves:
+                leaf.release_path()
+
+        for leaf, reward in zip(leaves, rewards):
+            leaf.backpropagate(reward)
 
     def _tree_policy(self):
-        # This is current root <- TwoPlayerMCTSNode(state=board_state)
-        # Initial state:
-        #   children = []
-        #   n = 0.0 -> because of @property
         current_node = self.root
-        # While not game_over() -> self.game_result is not None (False)
+
         while not current_node.is_terminal_node():
-            # Initial state:
-            #   len(self.untried_actions) == 0 -> at the beginning 9 -> 9 == 0 ? -> False
-            # untried_actions -> get_legal_actions (in this case)
-            #
-            #   See the Notes -> Note for the game coordinates to see game coordinates
-            #
-            # not False? -> go to current_node.expand()
-            # With 3x3 game only 9 children from root aviable
-            # Further state:
-            #   -> After all 9 root children are expanded:
-            #   -> len(self.untried_actions) == 0 -> 0 == 0 ? -> True
-            #      not True -> False -> go to else
-            #   -> current_node = current_node.best_child()
-            #   Example: best_child() returns child_3
-            #
-            #   Next while iteration:
-            #      -> current_node is now child_3
-            #      -> If child_3 still has untried actions -> expand one of its children
-            #      -> Example: child_3 -> child_3_0
-            #      -> child_3_0 is returned from _tree_policy() and rollout starts from it
             if not current_node.is_fully_expanded():
-                # -> Add child_node to the children of current_node
-                # -> Child node has proposed virutal move with next_state (board_state)
                 return current_node.expand()
-            # Further state:
-            #   All of untried_actions -> get_legal_actions poped
-            #   No more actions to try, return best_child anyway
-            else:
-                # For each child of current node calculate best_child
-                # During MCTS:
-                #   "Which moves should I explore more?" -> c_param = 1.4   
-                current_node = current_node.best_child()
+            current_node = current_node.best_child()
+
         return current_node

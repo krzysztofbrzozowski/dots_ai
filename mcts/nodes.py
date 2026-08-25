@@ -1,6 +1,31 @@
-import numpy as np
-from collections import defaultdict
 from abc import ABC, abstractmethod
+from collections import defaultdict
+
+import numpy as np
+
+
+def rollout_state(state, seed=None):
+    """Play ``state`` to completion without retaining a search-tree node.
+
+    This top-level function is intentionally pickleable so a process pool can
+    execute CPU-bound rollouts without copying the node's parent tree. A seed
+    supplied by the owning search keeps concurrent rollouts independent even
+    when worker processes were created from the same parent process.
+    """
+    current_rollout_state = state
+    rng = None if seed is None else np.random.default_rng(seed)
+
+    while not current_rollout_state.is_game_over():
+        possible_moves = current_rollout_state.get_legal_actions()
+        if rng is None:
+            action_index = np.random.randint(len(possible_moves))
+        else:
+            action_index = rng.integers(len(possible_moves))
+        current_rollout_state = current_rollout_state.move(
+            possible_moves[int(action_index)]
+        )
+
+    return current_rollout_state.game_result
 
 
 class MCTSNode(ABC):
@@ -10,6 +35,7 @@ class MCTSNode(ABC):
         self.parent = parent
         self.action = action
         self.children = []
+        self._virtual_visits = 0
 
     @property
     @abstractmethod
@@ -46,6 +72,32 @@ class MCTSNode(ABC):
     def is_fully_expanded(self):
         return len(self.untried_actions) == 0
 
+    @property
+    def virtual_visits(self):
+        """Number of unfinished rollouts currently reserved through this node."""
+        return self._virtual_visits
+
+    @property
+    def effective_n(self):
+        """Visits visible to tree selection, including in-flight rollouts."""
+        return self.n + self.virtual_visits
+
+    def reserve_path(self):
+        """Temporarily reserve this node and its ancestors for one rollout."""
+        current_node = self
+        while current_node is not None:
+            current_node._virtual_visits += 1
+            current_node = current_node.parent
+
+    def release_path(self):
+        """Release a reservation previously created by :meth:`reserve_path`."""
+        current_node = self
+        while current_node is not None:
+            if current_node._virtual_visits <= 0:
+                raise RuntimeError("cannot release an unreserved MCTS path")
+            current_node._virtual_visits -= 1
+            current_node = current_node.parent
+
     def best_child(self, c_param=1.4):
         # c_param controls how strongly MCTS prefers exploration
         # 1.4 is a common default value because it is close to sqrt(2) ≈ 1.414
@@ -81,10 +133,22 @@ class MCTSNode(ABC):
         #
         # Final intuition:
         #   good child + not explored enough child can both get selected
-        choices_weights = [
-            (c.q / c.n) + c_param * np.sqrt((2 * np.log(self.n) / c.n))
-            for c in self.children
-        ]
+        parent_visits = max(self.effective_n, 1.0)
+
+        def choice_weight(child):
+            child_visits = child.effective_n
+            if child_visits == 0:
+                return np.inf if c_param else 0.0
+            # Treat each unfinished rollout as a temporary loss. This steers
+            # the rest of the batch away from work that is already in flight.
+            effective_q = child.q - child.virtual_visits
+            return (
+                (effective_q / child_visits)
+                + c_param
+                * np.sqrt(2 * np.log(parent_visits) / child_visits)
+            )
+
+        choices_weights = [choice_weight(child) for child in self.children]
         return self.children[np.argmax(choices_weights)]
 
     def rollout_policy(self, possible_moves):        
@@ -146,15 +210,7 @@ class TwoPlayerMCTSNode(MCTSNode):
         return self.state.is_game_over()
 
     def rollout(self):
-        # Assign the child_node.state -> next_state from above methid
-        current_rollout_state = self.state
-        # Play the game until a terminal state is reached
-        # Here is the same logic, move is only done in new object
-        while not current_rollout_state.is_game_over():
-            possible_moves = current_rollout_state.get_legal_actions()
-            action = self.rollout_policy(possible_moves)
-            current_rollout_state = current_rollout_state.move(action)
-        return current_rollout_state.game_result
+        return rollout_state(self.state)
 
     def backpropagate(self, result):
         self._number_of_visits += 1.
