@@ -4,6 +4,7 @@ import os
 import time
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
+from pathlib import Path
 from threading import Thread
 
 import uvicorn
@@ -12,16 +13,18 @@ from GUI.presentation import move_message
 from GUI.server import app, publish_state
 from game.enclosure import DotsGame
 from mcts.enclosure import MonteCarloTreeSearch, TwoPlayerMCTSNode, rollout_state
+from training import SelfPlayTrajectory
 
 
-DEFAULT_ROWS = 10
-DEFAULT_COLS = 10
+ROWS = 10
+COLS = 10
 DEFAULT_SIMULATIONS = 12
 DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
-SIMULATION_SECONDS = 30
+SIMULATION_SECONDS = 1
 DEFAULT_MCTS_WORKERS = os.cpu_count()
+TRAINING_DATA_DIRECTORY = Path(__file__).resolve().parent / "training_data"
 
 
 def run_mcts_game(
@@ -32,8 +35,9 @@ def run_mcts_game(
     simulation_seconds=SIMULATION_SECONDS,
     rollout_executor=None,
     rollout_batch_size=1,
+    training_data_directory=None,
 ):
-    """Own and run the complete game loop, publishing after every MCTS move."""
+    """Run one game and optionally save its played self-play trajectory"""
     if simulations_number <= 0:
         raise ValueError("simulations_number must be positive")
     if move_delay < 0:
@@ -42,6 +46,15 @@ def run_mcts_game(
         raise ValueError("simulation_seconds must be positive or None")
 
     move_number = 0
+    trajectory = (
+        SelfPlayTrajectory(
+            simulation_seconds=simulation_seconds,
+            simulations_number=simulations_number,
+            rollout_batch_size=rollout_batch_size,
+        )
+        if training_data_directory is not None
+        else None
+    )
 
     while board_state.game_result is None:
         moving_player = board_state.next_to_move
@@ -71,6 +84,14 @@ def run_mcts_game(
         if best_node.action is None:
             raise RuntimeError("MCTS returned a node without an action")
 
+        if trajectory is not None:
+            trajectory.record_search(
+                state=board_state,
+                root=root,
+                selected_action=best_node.action,
+                search_stats=stats,
+            )
+
         board_state = best_node.state
         move_number += 1
         publisher(
@@ -83,6 +104,13 @@ def run_mcts_game(
         if move_delay and board_state.game_result is None:
             time.sleep(move_delay)
 
+    if trajectory is not None:
+        training_data_path = trajectory.save(
+            training_data_directory,
+            final_result=board_state.game_result,
+        )
+        print(f"Saved self-play training data: {training_data_path}")
+
     return board_state
 
 
@@ -93,6 +121,7 @@ def run_parallel_mcts_game(
     publisher=publish_state,
     simulation_seconds=SIMULATION_SECONDS,
     workers=DEFAULT_MCTS_WORKERS,
+    training_data_directory=None,
 ):
     """Run a game using one persistent process pool for all MCTS moves"""
     if isinstance(workers, bool) or not isinstance(workers, int):
@@ -107,6 +136,7 @@ def run_parallel_mcts_game(
             move_delay=move_delay,
             publisher=publisher,
             simulation_seconds=simulation_seconds,
+            training_data_directory=training_data_directory,
         )
 
     # ``spawn`` is safe when this function runs in the GUI's game thread and
@@ -154,12 +184,13 @@ def run_parallel_mcts_game(
             # Passing the ProcessPoolExecutor object to run
             rollout_executor=rollout_executor,
             rollout_batch_size=workers,
+            training_data_directory=training_data_directory,
         )
 
 
 def main():
     # Initial board state
-    board_state = DotsGame(DEFAULT_ROWS, DEFAULT_COLS)
+    board_state = DotsGame(ROWS, COLS)
     publish_state(
         board_state,
         last_move=None,
@@ -175,6 +206,7 @@ def main():
             "simulations_number": DEFAULT_SIMULATIONS,
             "move_delay": DEFAULT_MOVE_DELAY,
             "workers": DEFAULT_MCTS_WORKERS,
+            "training_data_directory": TRAINING_DATA_DIRECTORY,
         },
         name="mcts-game-loop",
         daemon=True,

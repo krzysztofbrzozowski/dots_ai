@@ -94,6 +94,9 @@ class MonteCarloTreeSearch:
         # Final selection is exploitation-only
         # All reservations have been released before this point
         # Only completed results are considered
+        # TODO: For more diverse self-play training data, consider sampling
+        # early-game moves from the MCTS visit distribution instead of always
+        # selecting the exploitation-only argmax.
         return self.root.best_child(c_param=0.0)
 
     def _time_based_search(self, total_simulation_seconds):

@@ -96,20 +96,22 @@ http://127.0.0.1:8000
 Application settings are defined at the top of `main_mcts.py`:
 
 ```python
-DEFAULT_ROWS = 10
-DEFAULT_COLS = 10
+ROWS = 10
+COLS = 10
 DEFAULT_SIMULATIONS = 12
 DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 SIMULATION_SECONDS = 30
-DEFAULT_MCTS_WORKERS = min(8, max(1, (os.cpu_count() or 2) - 1))
+DEFAULT_MCTS_WORKERS = os.cpu_count()
+TRAINING_DATA_DIRECTORY = Path(__file__).resolve().parent / "training_data"
 ```
 
 `SIMULATION_SECONDS` is the wall-clock search budget for each move. The worker
-count leaves one logical CPU available and is capped at eight. Passing
+count defaults to the detected logical CPU count. Passing
 `simulation_seconds=None` to `run_mcts_game()` switches to the fixed
-`simulations_number` budget instead.
+`simulations_number` budget instead. A successfully completed application game
+writes its self-play trajectory below `TRAINING_DATA_DIRECTORY`.
 
 The MCTS worker stops after the game reaches a result. Uvicorn continues
 serving the final snapshot until the process is stopped with `Ctrl+C`.
