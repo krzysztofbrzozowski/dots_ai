@@ -115,12 +115,21 @@ export class DotsBoardRenderer {
     this.context.fillStyle = cssColor("--board-surface");
     this.context.fillRect(0, 0, width, height);
 
-    this.drawTerritory();
-    this.drawSearchOverlay();
+    const showAnalysisOverlay = this.overlay !== "none";
+    if (showAnalysisOverlay) {
+      this.drawTerritory();
+      this.drawSearchOverlay();
+    }
+
+    // The lattice and placed dots form the base position. The "None" mode
+    // deliberately stops here, leaving all search-specific marks hidden.
     this.drawGrid();
     this.drawDots();
-    this.drawSelectionMarkers();
-    this.drawSearchLabels();
+
+    if (showAnalysisOverlay) {
+      this.drawSelectionMarkers();
+      this.drawSearchLabels();
+    }
   }
 
   drawTerritory() {

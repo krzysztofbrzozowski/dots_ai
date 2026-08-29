@@ -224,10 +224,14 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
 
     assert page.status_code == 200
     assert "Decision timeline" in page.text
+    assert 'data-overlay="none"' in page.text
+    assert page.headers["cache-control"] == "no-store"
     assert script.status_code == 200
     assert "importGame" in script.text
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
+    assert 'this.overlay !== "none"' in renderer.text
+    assert renderer.headers["cache-control"] == "no-store"
     assert health.json() == {"status": "ready"}
 
 

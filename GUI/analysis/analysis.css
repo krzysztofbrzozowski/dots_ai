@@ -1,33 +1,33 @@
 :root {
   color-scheme: light;
-  --background: #f4f6f2;
+  --background: #f2f2f7;
   --surface: #ffffff;
-  --surface-raised: #eef3eb;
-  --surface-soft: #f7f9f5;
-  --board-surface: #fbfcfa;
-  --border: #dbe2d9;
-  --border-strong: #c5d0c3;
-  --text-primary: #20261f;
-  --text-secondary: #5e685e;
-  --text-tertiary: #879087;
-  --accent: #a8d95b;
-  --accent-dark: #edf6df;
-  --player-one: #d86959;
-  --player-two: #4f86c2;
-  --territory-player-one: rgba(216, 105, 89, 0.13);
-  --territory-player-two: rgba(79, 134, 194, 0.13);
-  --positive-value: #789c31;
-  --negative-value: #d06555;
+  --surface-raised: #ffffff;
+  --surface-soft: #f7f7fa;
+  --board-surface: #ffffff;
+  --border: #e5e5ea;
+  --border-strong: #c7c7cc;
+  --text-primary: #000000;
+  --text-secondary: #636366;
+  --text-tertiary: #8e8e93;
+  --accent: #007aff;
+  --accent-dark: rgba(0, 122, 255, 0.1);
+  --player-one: #ff3b30;
+  --player-two: #007aff;
+  --territory-player-one: rgba(255, 59, 48, 0.1);
+  --territory-player-two: rgba(0, 122, 255, 0.1);
+  --positive-value: #34c759;
+  --negative-value: #ff3b30;
   --overlay-label: #ffffff;
-  --overlay-label-outline: rgba(30, 35, 29, 0.9);
-  --selected-action: #729923;
-  --unvisited-action: #98a298;
-  --grid: #d2dbd0;
-  --danger: #b74c40;
-  --panel-shadow: 0 12px 34px rgba(38, 51, 35, 0.055);
-  --radius-large: 18px;
-  --radius-medium: 12px;
-  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --overlay-label-outline: rgba(0, 0, 0, 0.78);
+  --selected-action: #007aff;
+  --unvisited-action: #aeaeb2;
+  --grid: #d1d1d6;
+  --danger: #ff3b30;
+  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.035), 0 8px 24px rgba(0, 0, 0, 0.035);
+  --radius-large: 22px;
+  --radius-medium: 15px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -43,9 +43,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 45% -20%, rgba(168, 217, 91, 0.14), transparent 34%),
-    var(--background);
+  background: var(--background);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -70,7 +68,7 @@ button,
 button:focus-visible,
 .file-button input:focus-visible + span,
 .timeline-wheel:focus-visible {
-  outline: 3px solid rgba(114, 153, 35, 0.24);
+  outline: 3px solid rgba(0, 122, 255, 0.24);
   outline-offset: 2px;
 }
 
@@ -93,7 +91,7 @@ button:disabled {
   min-height: 74px;
   padding: 14px clamp(20px, 4vw, 58px);
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(242, 242, 247, 0.88);
   backdrop-filter: blur(18px);
 }
 
@@ -127,9 +125,10 @@ button:disabled {
   grid-template-rows: repeat(2, 6px);
   place-content: center;
   gap: 5px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface-raised);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .brand-mark i {
@@ -159,14 +158,14 @@ button:disabled {
   border: 1px solid transparent;
   border-radius: 10px;
   background: var(--accent);
-  color: #18200f;
+  color: #ffffff;
   cursor: pointer;
   font-size: 13px;
   font-weight: 750;
 }
 
 .file-button span:hover {
-  background: #b9e66f;
+  background: #0a84ff;
 }
 
 .file-button.is-busy span {
@@ -189,7 +188,7 @@ button:disabled {
   place-content: center;
   border: 2px dashed var(--accent);
   border-radius: 20px;
-  background: rgba(250, 252, 248, 0.95);
+  background: rgba(242, 242, 247, 0.96);
   color: var(--text-secondary);
   text-align: center;
   backdrop-filter: blur(14px);
@@ -288,7 +287,7 @@ button:disabled {
   min-height: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-large);
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--surface);
   box-shadow: var(--panel-shadow);
 }
 
@@ -341,23 +340,23 @@ button:disabled {
 }
 
 .player-pill.player-one {
-  border-color: rgba(216, 105, 89, 0.3);
+  border-color: rgba(255, 59, 48, 0.2);
   background: var(--territory-player-one);
-  color: #93483d;
+  color: #d70015;
 }
 
 .player-pill.player-two {
-  border-color: rgba(79, 134, 194, 0.3);
+  border-color: rgba(0, 122, 255, 0.2);
   background: var(--territory-player-two);
-  color: #386a9f;
+  color: #0062cc;
 }
 
 .overlay-switcher {
   display: flex;
   padding: 3px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 10px;
-  background: var(--surface-soft);
+  background: #ededf0;
 }
 
 .overlay-switcher button {
@@ -377,7 +376,7 @@ button:disabled {
 .overlay-switcher button.is-active {
   background: var(--surface-raised);
   color: var(--text-primary);
-  box-shadow: 0 0 0 1px var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 
 .board-stage {
@@ -580,9 +579,9 @@ button:disabled {
 }
 
 .playback-controls .play-button.is-playing {
-  border-color: rgba(114, 153, 35, 0.35);
+  border-color: rgba(0, 122, 255, 0.28);
   background: var(--accent-dark);
-  color: var(--selected-action);
+  color: var(--accent);
 }
 
 .timeline-wheel {
@@ -630,9 +629,9 @@ button:disabled {
   top: calc(50% - 39px);
   height: 78px;
   margin: 0 13px -78px;
-  border: 1px solid rgba(114, 153, 35, 0.22);
+  border: 1px solid rgba(0, 122, 255, 0.18);
   border-radius: 12px;
-  background: rgba(168, 217, 91, 0.09);
+  background: rgba(0, 122, 255, 0.07);
   pointer-events: none;
 }
 
@@ -680,8 +679,8 @@ button:disabled {
 }
 
 .timeline-item.is-active {
-  border-color: rgba(114, 153, 35, 0.2);
-  background: rgba(168, 217, 91, 0.08);
+  border-color: rgba(0, 122, 255, 0.16);
+  background: rgba(0, 122, 255, 0.07);
   color: var(--text-primary);
   opacity: 1;
   transform: scale(1);
@@ -777,7 +776,7 @@ button:disabled {
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(114, 153, 35, 0.12);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 
 .status-bar.is-busy .status-indicator {
@@ -785,13 +784,13 @@ button:disabled {
 }
 
 .status-bar.is-error {
-  border-color: rgba(183, 76, 64, 0.28);
-  color: #984138;
+  border-color: rgba(255, 59, 48, 0.24);
+  color: #d70015;
 }
 
 .status-bar.is-error .status-indicator {
   background: var(--danger);
-  box-shadow: 0 0 0 3px rgba(183, 76, 64, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.1);
 }
 
 @keyframes status-pulse {

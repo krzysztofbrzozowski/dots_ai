@@ -57,6 +57,20 @@ def create_app(store=None):
         version="1.0.0",
     )
 
+    @application.middleware("http")
+    async def prevent_local_gui_asset_caching(request: Request, call_next):
+        """Keep iterative GUI changes from mixing old and new browser assets."""
+        response = await call_next(request)
+        requested_path = request.url.path
+        is_gui_asset = (
+            requested_path == "/"
+            or requested_path.startswith("/assets/")
+            or requested_path.startswith("/shared/")
+        )
+        if is_gui_asset:
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     @application.exception_handler(AnalysisFileError)
     async def analysis_file_error_handler(_request, error):
         return JSONResponse(status_code=422, content={"detail": str(error)})

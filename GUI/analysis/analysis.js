@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js";
+} from "/shared/board_renderer.js?v=20260829";
 
 
 const elements = {
