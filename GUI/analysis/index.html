@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta
+      name="description"
+      content="Inspect the timeline and MCTS search data stored in a Dots NPZ game."
+    />
+    <title>Dots — game analysis</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/assets/analysis.css" />
+    <script type="module" src="/assets/analysis.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div>
+          <h1>Dots</h1>
+          <p>Search analysis</p>
+        </div>
+      </div>
+
+      <label id="file-button" class="file-button" for="npz-file">
+        <input id="npz-file" type="file" accept=".npz,application/octet-stream" />
+        <span>Open NPZ game</span>
+      </label>
+    </header>
+
+    <main id="drop-target" class="analysis-shell">
+      <div id="drop-overlay" class="drop-overlay" hidden>
+        <strong>Drop the NPZ game here</strong>
+        <span>The file will be inspected by the local analyzer.</span>
+      </div>
+
+      <section class="game-overview" aria-labelledby="game-title">
+        <div class="game-identity">
+          <p class="eyebrow">Saved self-play trajectory</p>
+          <h2 id="game-title">Choose a game to begin</h2>
+          <p id="game-subtitle" class="game-subtitle">
+            The game remains on your computer and is read by this local analyzer.
+          </p>
+        </div>
+
+        <div class="overview-metrics" aria-label="Game summary">
+          <div><span>Board</span><strong id="summary-board">—</strong></div>
+          <div><span>Decisions</span><strong id="summary-moves">—</strong></div>
+          <div><span>Result</span><strong id="summary-result">—</strong></div>
+          <div><span>Schema</span><strong id="summary-schema">—</strong></div>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="Saved game analysis workspace">
+        <article class="board-panel">
+          <div class="panel-heading board-heading">
+            <div>
+              <p class="eyebrow">Position before move</p>
+              <h2 id="board-title">Board state</h2>
+            </div>
+
+            <div class="board-heading-actions">
+              <span id="player-pill" class="player-pill">No frame</span>
+              <div id="overlay-switcher" class="overlay-switcher" aria-label="Board overlay">
+                <button class="is-active" type="button" data-overlay="value">Q / N</button>
+                <button type="button" data-overlay="raw-q">Raw Q</button>
+                <button type="button" data-overlay="visits">Visits</button>
+                <button type="button" data-overlay="policy">Policy</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="board-stage" class="board-stage">
+            <canvas
+              id="analysis-board"
+              role="img"
+              aria-label="Board waiting for a saved NPZ game."
+            >
+              Your browser does not support HTML Canvas.
+            </canvas>
+            <div id="board-empty" class="board-empty">
+              <div class="placeholder-grid" aria-hidden="true"></div>
+              <div>
+                <strong>Select an NPZ file</strong>
+                <p>Dots, territory, legal actions and search values will appear here.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="board-legend" aria-label="Board legend">
+            <span><i class="legend-dot player-one"></i>Player 1</span>
+            <span><i class="legend-dot player-two"></i>Player 2</span>
+            <span><i class="legend-ring selected"></i>Selected action</span>
+            <span><i class="legend-ring unvisited"></i>Unvisited legal action</span>
+            <span class="perspective-note">Values use the player-to-move perspective.</span>
+          </div>
+
+          <section class="frame-summary" aria-label="Current search summary">
+            <div><span>Selected action</span><strong id="frame-action">—</strong></div>
+            <div><span>Score</span><strong id="frame-score">—</strong></div>
+            <div><span>Legal moves</span><strong id="frame-legal">—</strong></div>
+            <div><span>Rollouts</span><strong id="frame-rollouts">—</strong></div>
+            <div><span>Elapsed</span><strong id="frame-elapsed">—</strong></div>
+            <div><span>Throughput</span><strong id="frame-throughput">—</strong></div>
+          </section>
+
+          <section class="cell-inspector" aria-labelledby="cell-inspector-title">
+            <div class="inspector-heading">
+              <p class="eyebrow">Board position</p>
+              <h3 id="cell-inspector-title">Select a cell</h3>
+            </div>
+            <div><span>Contents</span><strong id="cell-contents">—</strong></div>
+            <div><span>Legal</span><strong id="cell-legal">—</strong></div>
+            <div><span>Raw Q</span><strong id="cell-raw-q">—</strong></div>
+            <div><span>Q / N</span><strong id="cell-value">—</strong></div>
+            <div><span>Visits</span><strong id="cell-visits">—</strong></div>
+            <div><span>Policy</span><strong id="cell-policy">—</strong></div>
+          </section>
+        </article>
+
+        <aside class="timeline-panel" aria-labelledby="timeline-title">
+          <div class="panel-heading timeline-heading">
+            <div>
+              <p class="eyebrow">Decision timeline</p>
+              <h2 id="timeline-title">Moves</h2>
+            </div>
+            <span id="frame-counter" class="frame-counter">0 / 0</span>
+          </div>
+
+          <div class="playback-controls" aria-label="Timeline playback">
+            <button id="previous-frame" type="button" aria-label="Previous frame" disabled>↑</button>
+            <button id="play-timeline" class="play-button" type="button" disabled>Play</button>
+            <button id="next-frame" type="button" aria-label="Next frame" disabled>↓</button>
+          </div>
+
+          <div id="timeline-wheel" class="timeline-wheel" tabindex="0" aria-label="Move timeline">
+            <div class="timeline-focus" aria-hidden="true"></div>
+            <ol id="timeline-list" class="timeline-list"></ol>
+            <div id="timeline-empty" class="timeline-empty">
+              <strong>No game loaded</strong>
+              <span>Timeline frames will appear here.</span>
+            </div>
+          </div>
+
+          <div class="timeline-help">
+            <span>Scroll or drag</span>
+            <span>Keyboard ↑ ↓</span>
+          </div>
+        </aside>
+      </section>
+
+      <section id="status" class="status-bar" aria-live="polite" aria-atomic="true">
+        <span class="status-indicator" aria-hidden="true"></span>
+        <p>Ready to open a saved game.</p>
+      </section>
+    </main>
+  </body>
+</html>

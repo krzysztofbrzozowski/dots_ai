@@ -8,3 +8,5 @@
   read-only browser interface.
 - [Self-play training data](README_TRAINING_DATA.md) — absolute game-state
   records, action-aligned root statistics, NPZ schema, and perspective handling.
+- [Saved-game analysis GUI](README_ANALYSIS.md) — NPZ validation, the canonical
+  analysis model, board overlays, and timeline navigation.
