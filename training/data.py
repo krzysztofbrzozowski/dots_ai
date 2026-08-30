@@ -6,6 +6,7 @@ training loader, so the same self-play data can support either perspective.
 """
 
 import os
+import re
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -20,6 +21,7 @@ except ImportError:  # pragma: no cover - direct module execution
 
 
 SCHEMA_VERSION = 1
+_FILENAME_PREFIX_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class SelfPlayTrajectory:
@@ -96,12 +98,29 @@ class SelfPlayTrajectory:
         self._completed_rollouts.append(int(search_stats.completed_rollouts))
         self._search_elapsed_seconds.append(float(search_stats.elapsed_seconds))
 
-    def save(self, output_directory, final_result):
+    def save(
+        self,
+        output_directory,
+        final_result,
+        *,
+        filename_suffix=None,
+    ):
         """Atomically write this completed trajectory and return its path."""
         if not self._boards:
             raise ValueError("cannot save an empty self-play trajectory")
         if final_result not in (PLAYER_1, 0, PLAYER_2):
             raise ValueError("final_result must be PLAYER_1, draw, or PLAYER_2")
+        valid_filename_suffix = (
+            filename_suffix is None
+            or (
+                isinstance(filename_suffix, str)
+                and _FILENAME_PREFIX_PATTERN.fullmatch(filename_suffix)
+            )
+        )
+        if not valid_filename_suffix:
+            raise ValueError(
+                "filename_suffix may contain only letters, digits, '-' and '_'"
+            )
 
         rows, cols = self._board_shape
         size_directory = Path(output_directory) / f"{rows}x{cols}"
@@ -110,7 +129,11 @@ class SelfPlayTrajectory:
         game_id = uuid.uuid4().hex
         created_at = datetime.now(timezone.utc)
         timestamp = created_at.strftime("%Y%m%dT%H%M%S.%fZ")
-        destination = size_directory / f"game_{timestamp}_{game_id}.npz"
+        if filename_suffix is None:
+            filename = f"game_{timestamp}_{game_id}.npz"
+        else:
+            filename = f"{timestamp}_{game_id}_{filename_suffix}.npz"
+        destination = size_directory / filename
 
         arrays = {
             "schema_version": np.asarray(SCHEMA_VERSION, dtype=np.int16),

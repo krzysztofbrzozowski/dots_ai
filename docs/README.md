@@ -10,3 +10,5 @@
   records, action-aligned root statistics, NPZ schema, and perspective handling.
 - [Saved-game analysis GUI](README_ANALYSIS.md) — NPZ validation, the canonical
   analysis model, board overlays, and timeline navigation.
+- [Game arena](../_game_arena/README.md) — independent MCTS mode and time
+  settings for Player 1 and Player 2, with categorized trajectory recording.

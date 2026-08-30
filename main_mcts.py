@@ -16,8 +16,8 @@ from mcts.enclosure import MonteCarloTreeSearch, TwoPlayerMCTSNode, rollout_stat
 from training import SelfPlayTrajectory
 
 
-ROWS = 10
-COLS = 10
+ROWS = 4
+COLS = 4
 DEFAULT_SIMULATIONS = 12
 DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"

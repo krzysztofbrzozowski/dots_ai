@@ -70,6 +70,20 @@ Model batches should group games by board dimensions. This allows one fully
 convolutional model to support several `n × n` variants without padding every
 sample to the largest configured board.
 
+## Game arena records
+
+Games launched with `python -m _game_arena` are stored separately from uniform
+self-play runs:
+
+```text
+training_data/_game_arena/<rows>x<cols>/
+```
+
+The size directory identifies the board. The filename encodes the first player
+and both players' MCTS mode, seconds, and worker count after its timestamp and
+unique ID. The contents use the same unchanged schema-v1 fields listed above;
+arena-specific parameters are not added to the NPZ schema.
+
 ## Loading
 
 `load_self_play_game()` disables pickle and validates the schema version:
