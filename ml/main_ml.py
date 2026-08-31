@@ -50,7 +50,6 @@ x = layers.GlobalAveragePooling2D()(x)
 outputs = layers.Dense(3, activation="softmax")(x)
 
 model = keras.Model(inputs, outputs)
-# --- END MODEL DEFINITION
 
 model.compile(
     optimizer="adam",

@@ -8,27 +8,93 @@ from training import load_self_play_game
 
 
 def game_to_samples(game):
-    """Convert one loaded game into CNN inputs and sparse class labels."""
+    """Convert one loaded game into CNN inputs and sparse class labels"""
+    # Copy loaded game (np arrays) object to local one
+    # Boards -> each move board state
+    # PLAYER_1 = 1
+    # PLAYER_2 = -1
+    # EMPTY = 0
+    # [0:25]
+    #   -> [[0, 0, 0, 0, 0],
+    #       [0, 0, 0, 0, 0],
+    #       [0, 0, 1, 0, 0],
+    #       [0, 0, 0, 0, 0],
+    #       [0, 0, 0, 0, 0]],
     boards = game["boards"]
     territories = game["territories"]
     next_players = game["next_players"]
     scores = game["scores"]
 
+    # player_planes = 
+    # [0:25]
+    #   -> [[+1]],
+    #   -> [[-1]],
     player_planes = next_players[:, None, None]
+    # NumPy boroadcasting
+    # [0:25]
+    #   -> [[0, 0, 0, 0, 0],   ==  [[1]]     ->  [[False, False, False, False, False],
+    #       [0, 0, 0, 0, 0],   ==  [[1]]     ->   [False, False, False, False, False],
+    #       [0, 0, 1, 0, 0],   ==  [[1]]     ->   [False, False, True,  False, False],
+    #       [0, 0, 0, 0, 0],   ==  [[1]]     ->   [False, False, False, False, False],
+    #       [0, 0, 0, 0, 0]],  ==  [[1]]     ->   [False, False, False, False, False]],
     my_dots = boards == player_planes
     opponent_dots = boards == -player_planes
     my_territory = territories == player_planes
     opponent_territory = territories == -player_planes
 
     player_1_to_move = next_players == 1
+    # TODO -> probably will be better to put my_score and opponent score as
+    # scalar value and add it ot last layer as layers.Concatenate(x, score_input)?
+    # my_scores = np.where(condittion, if True, if False)
+    # -> scores[:, 0]
+    #   -> all rows
+    #   -> column 0
     my_scores = np.where(player_1_to_move, scores[:, 0], scores[:, 1])
     opponent_scores = np.where(player_1_to_move, scores[:, 1], scores[:, 0])
+    
+    # Create plane of board.shape from the moves
     my_score_planes = np.broadcast_to(my_scores[:, None, None], boards.shape)
     opponent_score_planes = np.broadcast_to(
         opponent_scores[:, None, None],
         boards.shape,
     )
 
+    # Brain imagination
+    # 2 próbki,
+    # plansza 2×2,
+    # 3 cechy na każde pole
+    #
+    # ->
+    #
+    #    [
+    #        # próbka 0
+    #        [
+    #            # row 0
+    #            [
+    #                [1, 0, 5],   # col 0 -> 3 cechy (like depth)
+    #                [0, 1, 2],   # col 1 -> 3 cechy
+    #            ],
+    #    
+    #            # row 1
+    #            [
+    #                [0, 0, 3],
+    #                [1, 0, 4],
+    #            ],
+    #        ],
+    #    
+    #        # próbka 1
+    #        [
+    #            [
+    #                [0, 1, 7],
+    #                [1, 0, 6],
+    #            ],
+    #            [
+    #                [0, 0, 1],
+    #                [0, 1, 8],
+    #            ],
+    #        ],
+    #    ]
+    # -> Stack it, create depth
     samples = np.stack(
         (
             my_dots,
@@ -42,18 +108,23 @@ def game_to_samples(game):
         axis=-1,
     ).astype(np.float32)
 
+    # Populate result e.g. [-1, 1, -1...]
     result_for_current_player = int(game["final_result"]) * next_players
+    # Change result to sparse_categorical_crossentropy -> 0 lose, 1 draw, 2 win
     labels = (result_for_current_player + 1).astype(np.int64)
     return samples, labels
 
 
 def load_game_samples(path):
-    """Load one NPZ game and convert all of its moves into samples."""
-    return game_to_samples(load_self_play_game(path))
+    """Load one NPZ game and convert all of its moves into samples"""
+    # Get dictionary with 1 game details -> game details are np arrays
+    game = load_self_play_game(path)
+    return game_to_samples(game)
 
 
 def load_training_data(directory, validation_fraction=0.2, seed=42):
-    """Load one board-size directory and split complete games into two sets."""
+    """Load one board-size directory and split complete games into two sets"""
+    # Get all game paths from directory
     game_paths = sorted(Path(directory).glob("*.npz"))
     if len(game_paths) < 2:
         raise ValueError("at least two game files are required")
@@ -63,7 +134,9 @@ def load_training_data(directory, validation_fraction=0.2, seed=42):
 
     validation_count = max(1, round(len(game_paths) * validation_fraction))
     validation_count = min(validation_count, len(game_paths) - 1)
+    # Take the 20% beginning of game paths as validation
     validation_paths = game_paths[:validation_count]
+    # And the 80% end as training
     training_paths = game_paths[validation_count:]
 
     def load_many(paths):

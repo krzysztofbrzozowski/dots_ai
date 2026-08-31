@@ -102,14 +102,14 @@ class ArenaConfig:
 
 # Edit this object to choose the arena matchup.
 ARENA_CONFIG = ArenaConfig(
-    rows=5,
-    cols=5,
+    rows=10,
+    cols=10,
     next_to_move=PLAYER_1,
     player_1=PlayerMCTSConfig.serial(
-        simulation_seconds=0.05,
+        simulation_seconds=1,
     ),
     player_2=PlayerMCTSConfig.parallel(
-        simulation_seconds=4,
+        simulation_seconds=30,
         workers=14,
     ),
 )

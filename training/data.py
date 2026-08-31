@@ -216,4 +216,6 @@ def load_self_play_game(path):
                 f"unsupported self-play schema {schema_version}; "
                 f"expected {SCHEMA_VERSION}"
             )
+        # For all of the contetnts of npz -> copy it and return
+        # as dictionary
         return {name: stored[name].copy() for name in stored.files}
