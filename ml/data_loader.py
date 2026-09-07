@@ -122,22 +122,34 @@ def load_game_samples(path):
     return game_to_samples(game)
 
 
-def load_training_data(directory, validation_fraction=0.2, seed=42):
-    """Load one board-size directory and split complete games into two sets"""
+def load_training_data(directory, validation_fraction=0.2, seed=42, test_fraction=0.0):
+    """Split complete games into train/validation and, optionally, test sets."""
+    if not 0 < validation_fraction < 1:
+        raise ValueError("validation_fraction must be between 0 and 1")
+    if not 0 <= test_fraction < 1:
+        raise ValueError("test_fraction must be between 0 (inclusive) and 1")
+    if validation_fraction + test_fraction >= 1:
+        raise ValueError("validation_fraction + test_fraction must be less than 1")
+
     # Get all game paths from directory
     game_paths = sorted(Path(directory).glob("*.npz"))
-    if len(game_paths) < 2:
-        raise ValueError("at least two game files are required")
+    minimum_games = 3 if test_fraction > 0 else 2
+    if len(game_paths) < minimum_games:
+        raise ValueError(f"at least {minimum_games} game files are required")
 
     rng = np.random.default_rng(seed)
     rng.shuffle(game_paths)
 
+    test_count = 0
+    if test_fraction > 0:
+        test_count = max(1, round(len(game_paths) * test_fraction))
+        test_count = min(test_count, len(game_paths) - 2)
     validation_count = max(1, round(len(game_paths) * validation_fraction))
-    validation_count = min(validation_count, len(game_paths) - 1)
-    # Take the 20% beginning of game paths as validation
-    validation_paths = game_paths[:validation_count]
-    # And the 80% end as training
-    training_paths = game_paths[validation_count:]
+    validation_count = min(validation_count, len(game_paths) - test_count - 1)
+    # Keep every move from a given game in the same split to avoid data leakage.
+    test_paths = game_paths[:test_count]
+    validation_paths = game_paths[test_count:test_count + validation_count]
+    training_paths = game_paths[test_count + validation_count:]
 
     def load_many(paths):
         loaded = [load_game_samples(path) for path in paths]
@@ -145,4 +157,7 @@ def load_training_data(directory, validation_fraction=0.2, seed=42):
         labels = np.concatenate([item[1] for item in loaded], axis=0)
         return samples, labels
 
-    return load_many(training_paths), load_many(validation_paths)
+    datasets = load_many(training_paths), load_many(validation_paths)
+    if test_fraction > 0:
+        return (*datasets, load_many(test_paths))
+    return datasets

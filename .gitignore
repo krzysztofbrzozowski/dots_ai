@@ -21,3 +21,6 @@ examples/
 
 # Generated MCTS self-play datasets
 training_data/
+
+# Trained models and training plots
+ml/models/
