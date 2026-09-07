@@ -17,7 +17,7 @@ from ml.data_loader import load_training_data
     (val_samples, val_labels),
     (test_samples, test_labels),
 ) = load_training_data(
-    PROJECT_ROOT / "training_data" / "_game_arena" / "10x10",
+    PROJECT_ROOT / "training_data" / "_game_arena_data_collection" / "10x10_5553",
     validation_fraction=0.2,
     test_fraction=0.1,
 )
@@ -41,11 +41,11 @@ inputs = keras.Input(shape=(10, 10, 7))
 x = layers.Conv2D(filters=32, kernel_size=3, activation="relu", padding="same")(inputs)
 x = layers.MaxPooling2D(pool_size=2)(x)
 
-x = layers.Conv2D(filters=64, kernel_size=3, activation="relu", padding="same")(x)
-x = layers.MaxPooling2D(pool_size=2)(x)
+# x = layers.Conv2D(filters=64, kernel_size=3, activation="relu", padding="same")(x)
+# x = layers.MaxPooling2D(pool_size=2)(x)
 
-x = layers.Conv2D(filters=128, kernel_size=3, activation="relu", padding="same")(x)
-x = layers.MaxPooling2D(pool_size=2)(x)
+# x = layers.Conv2D(filters=128, kernel_size=3, activation="relu", padding="same")(x)
+# x = layers.MaxPooling2D(pool_size=2)(x)
 
 # x = layers.Conv2D(filters=256, kernel_size=3, activation="relu", padding="same")(x)
 # # x = layers.MaxPooling2D(pool_size=2)(x)
@@ -70,7 +70,7 @@ MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 history = model.fit(
     train_samples,
     train_labels,
-    epochs=50,
+    epochs=20,
     validation_data=(val_samples, val_labels),
     callbacks=[
         keras.callbacks.ModelCheckpoint(
