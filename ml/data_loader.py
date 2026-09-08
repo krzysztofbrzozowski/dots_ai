@@ -44,15 +44,22 @@ def game_to_samples(game):
 
     player_1_to_move = next_players == 1
     # TODO -> probably will be better to put my_score and opponent score as
-    # scalar value and add it ot last layer as layers.Concatenate(x, score_input)?
+    # scalar values and add them to the last layer with layers.Concatenate.
     # my_scores = np.where(condittion, if True, if False)
     # -> scores[:, 0]
     #   -> all rows
     #   -> column 0
-    my_scores = np.where(player_1_to_move, scores[:, 0], scores[:, 1])
-    opponent_scores = np.where(player_1_to_move, scores[:, 1], scores[:, 0])
+    score_scale = np.float32(boards.shape[1] * boards.shape[2])
+    my_scores = (
+        np.where(player_1_to_move, scores[:, 0], scores[:, 1]).astype(np.float32)
+        / score_scale
+    )
+    opponent_scores = (
+        np.where(player_1_to_move, scores[:, 1], scores[:, 0]).astype(np.float32)
+        / score_scale
+    )
     
-    # Create plane of board.shape from the moves
+    # Create normalized [0, 1] score planes with the same shape as the boards.
     my_score_planes = np.broadcast_to(my_scores[:, None, None], boards.shape)
     opponent_score_planes = np.broadcast_to(
         opponent_scores[:, None, None],

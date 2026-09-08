@@ -11,7 +11,11 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-MODEL_PATH = Path(__file__).resolve().parent / "models" / "value_model.keras"
+MODEL_PATH = (
+    Path(__file__).resolve().parent
+    / "models"
+    / "10x10_64322_5conv_d4_normalized.keras"
+)
 
 from game.enclosure import DotsGame
 
@@ -21,10 +25,11 @@ def game_state_to_model_input(state):
 
     Channels: my dots, opponent dots, my territory, opponent territory,
     legal moves, my score, opponent score. "My" means state.next_to_move.
-    Keep scores at their training scale; do not divide these inputs by 255.
+    Scores are normalized by board area, exactly as in the training loader.
     """
     player = state.next_to_move
     legal_mask = (state.board == 0) & (state.territory == 0)
+    score_scale = np.float32(state.board.size)
     sample = np.stack(
         (
             state.board == player,
@@ -32,8 +37,8 @@ def game_state_to_model_input(state):
             state.territory == player,
             state.territory == -player,
             legal_mask,
-            np.full(state.board.shape, state.score[player]),
-            np.full(state.board.shape, state.score[-player]),
+            np.full(state.board.shape, state.score[player] / score_scale),
+            np.full(state.board.shape, state.score[-player] / score_scale),
         ),
         axis=-1,
     ).astype(np.float32)
@@ -109,7 +114,7 @@ def main():
         some_test_state = some_test_state.move(move)
 
     # This is the next move we want to evaluate, made by state.next_to_move.
-    move_to_evaluate = (6, 6)
+    move_to_evaluate = (0, 0)
     prediction = predict_move(test_model, some_test_state, move_to_evaluate)
     print("Position before the candidate move:")
     print(some_test_state.render())
