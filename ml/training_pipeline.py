@@ -13,7 +13,13 @@ def batched_array_dataset(samples, labels, batch_size, *, shuffle=False, seed=No
     avoids making another full in-memory copy of the multi-million-position
     training set, as ``Dataset.from_tensor_slices`` would do.
     """
-    if len(samples) != len(labels):
+    sample_arrays = samples if isinstance(samples, (tuple, list)) else (samples,)
+    if not sample_arrays:
+        raise ValueError("samples cannot be empty")
+    number_of_samples = len(sample_arrays[0])
+    if any(len(array) != number_of_samples for array in sample_arrays):
+        raise ValueError("all sample inputs must contain the same number of items")
+    if number_of_samples != len(labels):
         raise ValueError("samples and labels must contain the same number of items")
     if (
         not isinstance(batch_size, int)
@@ -21,11 +27,14 @@ def batched_array_dataset(samples, labels, batch_size, *, shuffle=False, seed=No
         or batch_size <= 0
     ):
         raise ValueError("batch_size must be a positive integer")
-    if len(samples) == 0:
+    if number_of_samples == 0:
         raise ValueError("samples and labels cannot be empty")
 
-    number_of_samples = len(samples)
     random_generator = np.random.default_rng(seed)
+
+    def select_samples(indices):
+        selected = tuple(array[indices] for array in sample_arrays)
+        return selected if isinstance(samples, (tuple, list)) else selected[0]
 
     def batches():
         if shuffle:
@@ -33,17 +42,23 @@ def batched_array_dataset(samples, labels, batch_size, *, shuffle=False, seed=No
             random_generator.shuffle(indices)
             for start in range(0, number_of_samples, batch_size):
                 batch_indices = indices[start:start + batch_size]
-                yield samples[batch_indices], labels[batch_indices]
+                yield select_samples(batch_indices), labels[batch_indices]
         else:
             for start in range(0, number_of_samples, batch_size):
                 stop = start + batch_size
-                yield samples[start:stop], labels[start:stop]
+                yield select_samples(slice(start, stop)), labels[start:stop]
 
-    output_signature = (
+    sample_signature = tuple(
         tf.TensorSpec(
-            shape=(None, *samples.shape[1:]),
-            dtype=tf.as_dtype(samples.dtype),
-        ),
+            shape=(None, *array.shape[1:]),
+            dtype=tf.as_dtype(array.dtype),
+        )
+        for array in sample_arrays
+    )
+    if not isinstance(samples, (tuple, list)):
+        sample_signature = sample_signature[0]
+    output_signature = (
+        sample_signature,
         tf.TensorSpec(
             shape=(None, *labels.shape[1:]),
             dtype=tf.as_dtype(labels.dtype),
@@ -73,9 +88,10 @@ def d4_symmetries(samples):
 
 def random_d4_augmentation(samples, targets):
     """Choose one exact D4 symmetry independently for every board in a batch."""
-    candidates = d4_symmetries(samples)
+    board_samples, score_features = samples
+    candidates = d4_symmetries(board_samples)
     symmetry_indices = tf.random.uniform(
-        shape=(tf.shape(samples)[0],),
+        shape=(tf.shape(board_samples)[0],),
         minval=0,
         maxval=8,
         dtype=tf.int32,
@@ -86,5 +102,5 @@ def random_d4_augmentation(samples, targets):
         axis=1,
         batch_dims=1,
     )
-    augmented_samples.set_shape(samples.shape)
-    return augmented_samples, targets
+    augmented_samples.set_shape(board_samples.shape)
+    return (augmented_samples, score_features), targets

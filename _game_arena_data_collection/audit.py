@@ -96,16 +96,25 @@ def audit_collection(directory):
         matchups[plan["matchup"]][record["final_result"]] += 1
         opening_lengths[len(record["opening_moves"])] += 1
         game = load_self_play_game(path)
-        samples, labels = game_to_samples(game)
-        if samples.dtype != np.float32 or samples.shape[1:] != (config.rows, config.cols, 7):
+        (board_samples, score_features), labels = game_to_samples(game)
+        if (
+            board_samples.dtype != np.float32
+            or board_samples.shape[1:] != (config.rows, config.cols, 5)
+            or score_features.dtype != np.float32
+            or score_features.shape[1:] != (2,)
+        ):
             raise ValueError(f"{path.name}: incompatible value-model input")
         label_counts += np.bincount(labels, minlength=3)
         signature = bytes([record["starting_player"] + 1]) + game["selected_actions"].tobytes()
         trajectories.add(hashlib.sha256(signature).hexdigest())
-        for sample in samples:
-            digest = hashlib.sha256(sample.tobytes()).hexdigest()
+        for board_sample, scores in zip(board_samples, score_features):
+            digest = hashlib.sha256(
+                board_sample.tobytes() + scores.tobytes()
+            ).hexdigest()
             positions.add(digest)
-            if np.count_nonzero(sample[:, :, 0] + sample[:, :, 1]) >= 10:
+            if np.count_nonzero(
+                board_sample[:, :, 0] + board_sample[:, :, 1]
+            ) >= 10:
                 later_count += 1
                 later_positions.add(digest)
         for row, col in game["selected_actions"][:10]:

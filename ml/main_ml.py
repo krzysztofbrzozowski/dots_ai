@@ -25,9 +25,9 @@ from ml.data_loader import load_training_data
 from ml.training_pipeline import batched_array_dataset, random_d4_augmentation
 
 (
-    (train_samples, train_labels),
-    (val_samples, val_labels),
-    (test_samples, test_labels),
+    (train_inputs, train_labels),
+    (val_inputs, val_labels),
+    (test_inputs, test_labels),
 ) = load_training_data(
     PROJECT_ROOT / "training_data" / "_game_arena_data_collection" / "10x10_64322",
     validation_fraction=0.2,
@@ -43,7 +43,7 @@ EPOCHS = 30
 # Keep array-to-tensor conversion batch-sized so the large NumPy dataset is not
 # duplicated in memory. Shuffling happens again whenever a new epoch starts.
 train_dataset = batched_array_dataset(
-    train_samples,
+    train_inputs,
     train_labels,
     BATCH_SIZE,
     shuffle=True,
@@ -60,13 +60,13 @@ augmented_train_dataset = train_dataset.map(
 ).prefetch(tf.data.AUTOTUNE)
 
 validation_dataset = batched_array_dataset(
-    val_samples,
+    val_inputs,
     val_labels,
     BATCH_SIZE,
 ).prefetch(tf.data.AUTOTUNE)
 
 test_dataset = batched_array_dataset(
-    test_samples,
+    test_inputs,
     test_labels,
     BATCH_SIZE,
 ).prefetch(tf.data.AUTOTUNE)
@@ -103,9 +103,10 @@ from keras import layers
 # outputs = layers.Dense(3, activation="softmax")(x)
 ### END PREV MODEL
 
-inputs = keras.Input(shape=(10, 10, 7))
+board_inputs = keras.Input(shape=(10, 10, 5), name="board")
+score_inputs = keras.Input(shape=(2,), name="scores")
 
-x = layers.Conv2D(filters=32, kernel_size=2, use_bias=False)(inputs)
+x = layers.Conv2D(filters=32, kernel_size=2, use_bias=False)(board_inputs)
 
 # We apply a series of convolutional blocks with increasing feature
 # depth. Each block consists of two batch-normalized depthwise
@@ -135,9 +136,10 @@ x = layers.GlobalAveragePooling2D()(x)
 # Like in the original model, we add a dropout layer for
 # regularization.
 x = layers.Dropout(0.5)(x)
+x = layers.Concatenate()([x, score_inputs])
 outputs = layers.Dense(3, activation="softmax")(x)
 
-model = keras.Model(inputs, outputs)
+model = keras.Model(inputs=(board_inputs, score_inputs), outputs=outputs)
 
 model.compile(
     optimizer=keras.optimizers.Adam(

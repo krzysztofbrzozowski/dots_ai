@@ -8,7 +8,7 @@ from training import load_self_play_game
 
 
 def game_to_samples(game):
-    """Convert one loaded game into CNN inputs and sparse class labels"""
+    """Convert one loaded game into model inputs and sparse class labels."""
     # Copy loaded game (np arrays) object to local one
     # Boards -> each move board state
     # PLAYER_1 = 1
@@ -43,8 +43,6 @@ def game_to_samples(game):
     opponent_territory = territories == -player_planes
 
     player_1_to_move = next_players == 1
-    # TODO -> probably will be better to put my_score and opponent score as
-    # scalar values and add them to the last layer with layers.Concatenate.
     # my_scores = np.where(condittion, if True, if False)
     # -> scores[:, 0]
     #   -> all rows
@@ -58,13 +56,9 @@ def game_to_samples(game):
         np.where(player_1_to_move, scores[:, 1], scores[:, 0]).astype(np.float32)
         / score_scale
     )
-    
-    # Create normalized [0, 1] score planes with the same shape as the boards.
-    my_score_planes = np.broadcast_to(my_scores[:, None, None], boards.shape)
-    opponent_score_planes = np.broadcast_to(
-        opponent_scores[:, None, None],
-        boards.shape,
-    )
+    # Scores are global position features, so keep them as two scalar inputs
+    # instead of repeating each value over every board cell.
+    score_features = np.stack((my_scores, opponent_scores), axis=-1)
 
     # Brain imagination
     # 2 próbki,
@@ -102,15 +96,13 @@ def game_to_samples(game):
     #        ],
     #    ]
     # -> Stack it, create depth
-    samples = np.stack(
+    board_samples = np.stack(
         (
             my_dots,
             opponent_dots,
             my_territory,
             opponent_territory,
             game["legal_masks"],
-            my_score_planes,
-            opponent_score_planes,
         ),
         axis=-1,
     ).astype(np.float32)
@@ -119,7 +111,7 @@ def game_to_samples(game):
     result_for_current_player = int(game["final_result"]) * next_players
     # Change result to sparse_categorical_crossentropy -> 0 lose, 1 draw, 2 win
     labels = (result_for_current_player + 1).astype(np.int64)
-    return samples, labels
+    return (board_samples, score_features), labels
 
 
 def load_game_samples(path):
@@ -160,9 +152,10 @@ def load_training_data(directory, validation_fraction=0.2, seed=42, test_fractio
 
     def load_many(paths):
         loaded = [load_game_samples(path) for path in paths]
-        samples = np.concatenate([item[0] for item in loaded], axis=0)
+        board_samples = np.concatenate([item[0][0] for item in loaded], axis=0)
+        score_features = np.concatenate([item[0][1] for item in loaded], axis=0)
         labels = np.concatenate([item[1] for item in loaded], axis=0)
-        return samples, labels
+        return (board_samples, score_features), labels
 
     datasets = load_many(training_paths), load_many(validation_paths)
     if test_fraction > 0:

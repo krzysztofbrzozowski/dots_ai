@@ -21,29 +21,31 @@ from game.enclosure import DotsGame
 
 
 def game_state_to_model_input(state):
-    """Encode a DotsGame as float32 (1, rows, cols, 7), matching data_loader.
+    """Encode a DotsGame as board and scalar score inputs matching data_loader.
 
-    Channels: my dots, opponent dots, my territory, opponent territory,
-    legal moves, my score, opponent score. "My" means state.next_to_move.
-    Scores are normalized by board area, exactly as in the training loader.
+    Board channels are my dots, opponent dots, my territory, opponent territory,
+    and legal moves. "My" means state.next_to_move. The two scalar scores are
+    normalized by board area, exactly as in the training loader.
     """
     player = state.next_to_move
     legal_mask = (state.board == 0) & (state.territory == 0)
     score_scale = np.float32(state.board.size)
-    sample = np.stack(
+    board_sample = np.stack(
         (
             state.board == player,
             state.board == -player,
             state.territory == player,
             state.territory == -player,
             legal_mask,
-            np.full(state.board.shape, state.score[player] / score_scale),
-            np.full(state.board.shape, state.score[-player] / score_scale),
         ),
         axis=-1,
     ).astype(np.float32)
+    score_features = np.asarray(
+        (state.score[player], state.score[-player]),
+        dtype=np.float32,
+    ) / score_scale
     # Keras expects a batch dimension, even for a single position.
-    return sample[np.newaxis, ...]
+    return board_sample[np.newaxis, ...], score_features[np.newaxis, ...]
 
 
 def predict_game_state(model, state):
@@ -54,10 +56,21 @@ def predict_game_state(model, state):
     Future MCTS should use the exact engine result for terminal positions.
     """
     model_input = game_state_to_model_input(state)
-    expected_shape = tuple(model.input_shape[1:])
-    if model_input.shape[1:] != expected_shape:
+    input_shapes = model.input_shape
+    if not (
+        isinstance(input_shapes, (tuple, list))
+        and len(input_shapes) == 2
+        and all(isinstance(shape, (tuple, list)) for shape in input_shapes)
+    ):
         raise ValueError(
-            f"Model expects {expected_shape}, got {model_input.shape[1:]}"
+            "Model must have board (rows, cols, 5) and score (2,) inputs; "
+            "retrain legacy single-input checkpoints"
+        )
+    expected_shapes = tuple(tuple(shape[1:]) for shape in input_shapes)
+    actual_shapes = tuple(value.shape[1:] for value in model_input)
+    if actual_shapes != expected_shapes:
+        raise ValueError(
+            f"Model expects {expected_shapes}, got {actual_shapes}"
         )
 
     # Training labels are 0=loss, 1=draw, 2=win, relative to the player to move.
