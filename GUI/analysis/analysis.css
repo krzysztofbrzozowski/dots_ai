@@ -1,6 +1,13 @@
 :root {
-  color-scheme: dark;
-  --background: #191520;
+  color-scheme: light;
+  --background: #ffffff;
+  --page-surface: #ffffff;
+  --page-border: #e1dce7;
+  --page-text: #2e2537;
+  --page-secondary: #665b73;
+  --page-muted: #796d86;
+  --page-cyan: #257886;
+  --page-pink: #a34475;
   --surface: #221d2b;
   --surface-raised: #302838;
   --surface-soft: #1e1926;
@@ -26,7 +33,7 @@
   --unvisited-action: #84748f;
   --grid: #4b3c56;
   --danger: #ffa6b7;
-  --panel-shadow: 0 12px 36px rgba(8, 5, 14, 0.16);
+  --panel-shadow: 0 8px 26px rgba(39, 25, 51, 0.1);
   --radius-large: 16px;
   --radius-medium: 10px;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -45,8 +52,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: radial-gradient(ellipse at 8% 0, rgba(156, 88, 147, 0.1), transparent 48%), var(--background);
-  color: var(--text-primary);
+  background: radial-gradient(ellipse at 8% 0, rgba(156, 88, 147, 0.035), transparent 48%), var(--background);
+  color: var(--page-text);
   font-family: var(--font-sans);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
@@ -83,6 +90,15 @@ button:disabled {
   color: #fff;
 }
 
+/* Keep the page chrome light while the board's root palette stays dark. */
+.app-header, .game-overview, .status-bar {
+  --text-primary: var(--page-text);
+  --text-secondary: var(--page-secondary);
+  --text-tertiary: var(--page-muted);
+  --border: var(--page-border);
+  color: var(--text-primary);
+}
+
 .app-header {
   position: sticky;
   z-index: 20;
@@ -93,7 +109,7 @@ button:disabled {
   min-height: 76px;
   padding: 14px clamp(18px, 2.8vw, 44px);
   border-bottom: 1px solid var(--border);
-  background: rgba(25, 21, 32, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(18px);
 }
 
@@ -181,12 +197,16 @@ button:disabled {
   height: 6px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px #79dce812;
+  background: var(--page-cyan);
+  box-shadow: 0 0 0 3px rgba(37, 120, 134, 0.08);
 }
 
 .file-button {
   position: relative;
+}
+
+.file-button input:focus-visible + span {
+  outline-color: var(--page-cyan);
 }
 
 .file-button input {
@@ -238,6 +258,7 @@ button:disabled {
 }
 
 .drop-overlay {
+  color-scheme: dark;
   position: fixed;
   z-index: 50;
   inset: 88px 18px 18px;
@@ -263,6 +284,8 @@ button:disabled {
 }
 
 .game-overview {
+  --accent: var(--page-cyan);
+  --player-one: var(--page-pink);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -322,7 +345,7 @@ button:disabled {
   padding: 13px 0;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #221d2b80;
+  background: var(--page-surface);
 }
 
 .overview-metrics div {
@@ -369,6 +392,8 @@ button:disabled {
 }
 
 .board-panel, .timeline-panel {
+  color-scheme: dark;
+  color: var(--text-primary);
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -1079,6 +1104,7 @@ kbd {
 }
 
 .status-bar.is-error {
+  --danger: #b23456;
   color: var(--danger);
 }
 

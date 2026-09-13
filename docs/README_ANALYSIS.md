@@ -25,8 +25,9 @@ persist the file.
 
 ## What the interface shows
 
-The analysis workspace uses a dark plum theme with pink Player 1 dots and cyan
-Player 2 dots. A warm gold ring marks the selected action. Search values use a
+The analysis workspace pairs an off-white page and header with dark plum board
+and timeline panels, pink Player 1 dots, and cyan Player 2 dots. A warm gold ring
+marks the selected action. Search values use a
 pink-to-cyan scale for negative-to-positive results and a cyan intensity scale
 for visits and policy. The legend updates with the selected overlay.
 
