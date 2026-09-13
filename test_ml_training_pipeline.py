@@ -1,11 +1,17 @@
 """Tests for exact square-board augmentation and batched array input."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import tensorflow as tf
 
 from game.enclosure import DotsGame
 from ml.data_loader import game_to_samples
-from ml.predictor import game_state_to_model_input
+from ml.predictor import (
+    analysis_frame_to_game_state,
+    game_state_to_model_input,
+    predict_move,
+)
 from ml.training_pipeline import (
     batched_array_dataset,
     d4_symmetries,
@@ -34,6 +40,59 @@ def test_training_and_prediction_use_matching_board_and_scalar_score_inputs():
     prediction_board, prediction_scores = game_state_to_model_input(state)
     assert prediction_board.shape == (1, 2, 2, 5)
     np.testing.assert_allclose(prediction_scores, [[0.5, 0.25]])
+
+
+def test_candidate_prediction_is_returned_for_the_player_making_the_move():
+    class FakeValueModel:
+        input_shape = [(None, 2, 2, 5), (None, 2)]
+
+        def predict(self, model_input, verbose=0):
+            assert model_input[0].shape == (1, 2, 2, 5)
+            assert model_input[1].shape == (1, 2)
+            assert verbose == 0
+            # The model sees the opponent after the candidate move.
+            return np.asarray([[0.2, 0.3, 0.5]], dtype=np.float32)
+
+    state = DotsGame(2, 2)
+    prediction = predict_move(FakeValueModel(), state, (0, 0))
+
+    # Swapping loss and win converts the opponent-facing model output back to
+    # the perspective of the player who made the candidate move.
+    assert abs(prediction["loss"] - 0.5) < 1e-6
+    assert abs(prediction["draw"] - 0.3) < 1e-6
+    assert abs(prediction["win"] - 0.2) < 1e-6
+    assert abs(prediction["value"] - (-0.3)) < 1e-6
+    assert prediction["source"] == "model"
+
+
+def test_saved_analysis_frame_becomes_an_independent_playable_state():
+    saved_game = SimpleNamespace(
+        rows=3,
+        cols=3,
+        frame_count=1,
+        boards=np.asarray(
+            [[[1, 1, 0], [0, -1, 0], [0, 0, -1]]],
+            dtype=np.int8,
+        ),
+        territories=np.asarray(
+            [[[0, 0, 0], [0, 0, 0], [0, 0, -1]]],
+            dtype=np.int8,
+        ),
+        scores=np.asarray([[4, 2]], dtype=np.int32),
+        next_players=np.asarray([-1], dtype=np.int8),
+    )
+
+    state = analysis_frame_to_game_state(saved_game, 0)
+
+    np.testing.assert_array_equal(state.board, saved_game.boards[0])
+    np.testing.assert_array_equal(state.territory, saved_game.territories[0])
+    assert state.score == {1: 4, -1: 2}
+    assert state.next_to_move == -1
+    assert state.groups.connected((0, 0), (0, 1))
+    assert (2, 2) not in state.groups
+
+    state.board[0, 0] = 0
+    assert saved_game.boards[0, 0, 0] == 1
 
 
 def test_d4_symmetries_are_exact_rotations_and_reflections():

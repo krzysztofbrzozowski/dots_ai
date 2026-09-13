@@ -24,3 +24,5 @@ training_data/
 
 # Trained models and training plots
 ml/models/
+
+_commands.md

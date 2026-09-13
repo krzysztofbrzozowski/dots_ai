@@ -63,6 +63,7 @@ export class DotsBoardRenderer {
 
   setOverlay(overlay) {
     this.overlay = overlay;
+    this.canvas.classList.toggle("is-head-value", overlay === "head-value");
     this.draw();
   }
 
@@ -116,8 +117,11 @@ export class DotsBoardRenderer {
     this.context.fillRect(0, 0, width, height);
 
     const showAnalysisOverlay = this.overlay !== "none";
+    const showSearchOverlay = !["none", "head-value"].includes(this.overlay);
     if (showAnalysisOverlay) {
       this.drawTerritory();
+    }
+    if (showSearchOverlay) {
       this.drawSearchOverlay();
     }
 
@@ -128,6 +132,8 @@ export class DotsBoardRenderer {
 
     if (showAnalysisOverlay) {
       this.drawSelectionMarkers();
+    }
+    if (showSearchOverlay) {
       this.drawSearchLabels();
     }
   }

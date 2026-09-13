@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260913";
+} from "/shared/board_renderer.js?v=20260913-head-value";
 
 
 const elements = {
@@ -41,6 +41,14 @@ const elements = {
   cellValue: document.querySelector("#cell-value"),
   cellVisits: document.querySelector("#cell-visits"),
   cellPolicy: document.querySelector("#cell-policy"),
+  headValuePanel: document.querySelector("#head-value-panel"),
+  headValueTitle: document.querySelector("#head-value-title"),
+  headValueModel: document.querySelector("#head-value-model"),
+  headValueMessage: document.querySelector("#head-value-message"),
+  headValueLoss: document.querySelector("#head-value-loss"),
+  headValueDraw: document.querySelector("#head-value-draw"),
+  headValueWin: document.querySelector("#head-value-win"),
+  headValueScore: document.querySelector("#head-value-score"),
   frameCounter: document.querySelector("#frame-counter"),
   previousFrame: document.querySelector("#previous-frame"),
   playTimeline: document.querySelector("#play-timeline"),
@@ -62,6 +70,9 @@ const view = {
   requestNumber: 0,
   frameCache: new Map(),
   pendingFrames: new Map(),
+  headValueCache: new Map(),
+  headValueRequestNumber: 0,
+  headValueController: null,
   scrollTimer: null,
   centeringTimer: null,
   isCenteringTimeline: false,
@@ -145,6 +156,107 @@ async function responsePayload(response) {
 }
 
 
+function cancelHeadValuePrediction() {
+  view.headValueRequestNumber += 1;
+  view.headValueController?.abort();
+  view.headValueController = null;
+}
+
+
+function resetHeadValuePanel(message) {
+  elements.headValuePanel.classList.remove(
+    "is-loading",
+    "is-error",
+    "is-positive",
+    "is-negative",
+  );
+  elements.headValueTitle.textContent = "Select a legal move";
+  elements.headValueMessage.textContent = message ||
+    "Click an empty legal position to evaluate the result after that move.";
+  for (const result of [
+    elements.headValueLoss,
+    elements.headValueDraw,
+    elements.headValueWin,
+    elements.headValueScore,
+  ]) {
+    result.textContent = "—";
+  }
+}
+
+
+function showHeadValueError(cell, message) {
+  resetHeadValuePanel(message);
+  elements.headValuePanel.classList.add("is-error");
+  elements.headValueTitle.textContent = `Cannot evaluate ${formatCoordinate(cell)}`;
+}
+
+
+function displayHeadValuePrediction(prediction) {
+  elements.headValuePanel.classList.remove("is-loading", "is-error");
+  elements.headValuePanel.classList.toggle("is-positive", prediction.value > 0);
+  elements.headValuePanel.classList.toggle("is-negative", prediction.value < 0);
+  elements.headValueTitle.textContent =
+    `${formatCoordinate(prediction.coordinate)} for ${playerName(prediction.player)}`;
+  elements.headValueModel.textContent = prediction.model;
+  elements.headValueModel.title = prediction.model;
+  elements.headValueMessage.textContent = prediction.source === "terminal_result"
+    ? "Exact result: this candidate move ends the game."
+    : "Prediction after this move, from the moving player's perspective.";
+  elements.headValueLoss.textContent = `${(prediction.loss * 100).toFixed(1)}%`;
+  elements.headValueDraw.textContent = `${(prediction.draw * 100).toFixed(1)}%`;
+  elements.headValueWin.textContent = `${(prediction.win * 100).toFixed(1)}%`;
+  elements.headValueScore.textContent = formatDecimal(prediction.value, 3, true);
+}
+
+
+async function requestHeadValue(cell) {
+  if (!view.analysis || !view.frame) return;
+
+  const frameIndex = view.frameIndex;
+  const [row, col] = cell;
+  const cacheKey = `${view.analysis.analysis_id}:${frameIndex}:${row}:${col}`;
+  cancelHeadValuePrediction();
+  const requestNumber = view.headValueRequestNumber;
+
+  elements.headValuePanel.classList.remove("is-error", "is-positive", "is-negative");
+  elements.headValuePanel.classList.add("is-loading");
+  elements.headValueTitle.textContent = `Evaluating ${formatCoordinate(cell)}…`;
+  elements.headValueMessage.textContent = "Running the local value-head model.";
+  elements.headValueLoss.textContent = "—";
+  elements.headValueDraw.textContent = "—";
+  elements.headValueWin.textContent = "—";
+  elements.headValueScore.textContent = "•••";
+
+  try {
+    let prediction = view.headValueCache.get(cacheKey);
+    if (!prediction) {
+      view.headValueController = new AbortController();
+      const query = new URLSearchParams({ row: String(row), col: String(col) });
+      const response = await fetch(
+        `/api/analyses/${view.analysis.analysis_id}/frames/${frameIndex}/head-value?${query}`,
+        { cache: "no-store", signal: view.headValueController.signal },
+      );
+      const payload = await responsePayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.detail || "The value-head prediction failed.");
+      }
+      prediction = payload;
+      view.headValueCache.set(cacheKey, prediction);
+    }
+
+    if (requestNumber !== view.headValueRequestNumber) return;
+    view.headValueController = null;
+    displayHeadValuePrediction(prediction);
+  } catch (error) {
+    if (error.name === "AbortError" || requestNumber !== view.headValueRequestNumber) {
+      return;
+    }
+    view.headValueController = null;
+    showHeadValueError(cell, error.message || "The value-head prediction failed.");
+  }
+}
+
+
 async function importGame(file) {
   if (view.importing) return;
 
@@ -180,6 +292,9 @@ async function importGame(file) {
     view.requestNumber += 1;
     view.frameCache.clear();
     view.pendingFrames.clear();
+    cancelHeadValuePrediction();
+    view.headValueCache.clear();
+    resetHeadValuePanel();
 
     updateGameOverview();
     buildTimeline();
@@ -333,6 +448,8 @@ async function selectFrame(
     0,
     Math.min(requestedIndex, view.analysis.frame_count - 1),
   );
+  cancelHeadValuePrediction();
+  if (view.overlay === "head-value") resetHeadValuePanel();
   const requestNumber = ++view.requestNumber;
   view.frameIndex = frameIndex;
   updateActiveTimelineItem();
@@ -406,11 +523,11 @@ function updateFrameDisplay() {
 
   boardRenderer.setFrame(frame);
   boardRenderer.setOverlay(view.overlay);
-  selectBoardCell(view.selectedCell);
+  selectBoardCell(view.selectedCell, false);
 }
 
 
-function selectBoardCell(cell) {
+function selectBoardCell(cell, runHeadValuePrediction = true) {
   if (!view.frame || !cell) return;
 
   const [row, col] = cell;
@@ -450,6 +567,11 @@ function selectBoardCell(cell) {
     ? `${(policy * 100).toFixed(2)}%`
     : "—";
   boardRenderer.setSelectedCell(cell);
+
+  if (view.overlay === "head-value" && runHeadValuePrediction) {
+    if (isLegal) requestHeadValue(cell);
+    else showHeadValueError(cell, "Choose an empty position marked as legal.");
+  }
 }
 
 
@@ -589,18 +711,29 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
     overlayButton.setAttribute("aria-pressed", String(overlayButton === button));
   }
   const descriptions = {
+    "head-value": "Click a legal position · prediction appears below",
     value: "Mean result · player-to-move perspective",
     "raw-q": "Win/loss balance · player-to-move perspective",
     visits: "Completed visits · brighter means more visits",
     policy: "Share of visits · brighter means higher probability",
     none: "Board and placed dots · search overlays hidden",
   };
+  const isHeadValue = view.overlay === "head-value";
   const isSequential = view.overlay === "visits" || view.overlay === "policy";
   elements.overlayDescription.textContent = descriptions[view.overlay];
-  elements.overlayScale.hidden = view.overlay === "none";
+  elements.overlayScale.hidden = view.overlay === "none" || isHeadValue;
   elements.overlayScale.classList.toggle("is-sequential", isSequential);
   elements.scaleLow.textContent = isSequential ? "Low" : "Negative";
   elements.scaleHigh.textContent = isSequential ? "High" : "Positive";
+  elements.headValuePanel.hidden = !isHeadValue;
+  cancelHeadValuePrediction();
+  if (isHeadValue) {
+    resetHeadValuePanel(
+      view.frame
+        ? undefined
+        : "Open a saved 10 × 10 game, then click a legal position.",
+    );
+  }
   boardRenderer.setOverlay(view.overlay);
 });
 

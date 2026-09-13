@@ -16,6 +16,7 @@ from analysis.service import (
     analysis_frame,
     analysis_summary,
 )
+from ml.predictor import ValueHeadPredictor, ValueHeadUnavailableError
 
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
@@ -48,9 +49,10 @@ async def _read_request_body_with_limit(request):
     return bytes(file_bytes)
 
 
-def create_app(store=None):
+def create_app(store=None, predictor=None):
     """Build an application with an injectable store for isolated tests."""
     analysis_store = store or AnalysisStore()
+    value_head_predictor = predictor or ValueHeadPredictor()
     application = FastAPI(
         title="Dots MCTS Analysis API",
         description="Read-only analysis of saved MCTS self-play games.",
@@ -116,6 +118,56 @@ def create_app(store=None):
                 status_code=404,
                 detail=f"Frame {frame_index} does not exist in this game.",
             ) from error
+
+    @application.get(
+        "/api/analyses/{analysis_id}/frames/{frame_index}/head-value"
+    )
+    def get_head_value(
+        analysis_id: str,
+        frame_index: int,
+        row: int,
+        col: int,
+    ):
+        """Evaluate one legal candidate move with the configured value head."""
+        try:
+            game = analysis_store.get(analysis_id)
+            if not 0 <= frame_index < game.frame_count:
+                raise FrameNotFoundError(frame_index)
+            if not (0 <= row < game.rows and 0 <= col < game.cols):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Position ({row}, {col}) is outside the board.",
+                )
+            if game.legal_masks[frame_index, row, col] != 1:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Position ({row}, {col}) is not a legal move.",
+                )
+
+            prediction = value_head_predictor.predict_analysis_move(
+                game,
+                frame_index,
+                (row, col),
+            )
+            return {
+                "frame_index": frame_index,
+                "move_number": frame_index + 1,
+                **prediction,
+            }
+        except AnalysisNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="The analysis session was not found. Import the file again.",
+            ) from error
+        except FrameNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Frame {frame_index} does not exist in this game.",
+            ) from error
+        except ValueHeadUnavailableError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @application.delete(
         "/api/analyses/{analysis_id}",

@@ -185,7 +185,30 @@ def test_loader_rejects_non_npz_bytes_and_file_extensions():
 
 
 def test_analysis_api_imports_reads_and_releases_a_game():
-    client = TestClient(create_app(AnalysisStore(maximum_sessions=2)))
+    class StubValueHeadPredictor:
+        def __init__(self):
+            self.calls = []
+
+        def predict_analysis_move(self, game, frame_index, move):
+            self.calls.append((game.game_id, frame_index, move))
+            return {
+                "coordinate": list(move),
+                "player": int(game.next_players[frame_index]),
+                "model": "test-value-head.keras",
+                "loss": 0.2,
+                "draw": 0.3,
+                "win": 0.5,
+                "value": 0.3,
+                "source": "model",
+            }
+
+    predictor = StubValueHeadPredictor()
+    client = TestClient(
+        create_app(
+            AnalysisStore(maximum_sessions=2),
+            predictor=predictor,
+        )
+    )
 
     imported = client.post(
         "/api/analyses",
@@ -206,6 +229,23 @@ def test_analysis_api_imports_reads_and_releases_a_game():
     assert frame_response.status_code == 200
     assert frame_response.json()["board"] == [[1, 0], [0, 0]]
 
+    head_value_response = client.get(
+        f"/api/analyses/{analysis_id}/frames/0/head-value?row=0&col=1"
+    )
+    assert head_value_response.status_code == 200
+    head_value = head_value_response.json()
+    assert head_value["coordinate"] == [0, 1]
+    assert head_value["player"] == 1
+    assert head_value["model"] == "test-value-head.keras"
+    assert head_value["value"] == 0.3
+    assert predictor.calls == [("test-game", 0, (0, 1))]
+
+    illegal_head_value = client.get(
+        f"/api/analyses/{analysis_id}/frames/1/head-value?row=0&col=0"
+    )
+    assert illegal_head_value.status_code == 422
+    assert "not a legal move" in illegal_head_value.json()["detail"]
+
     missing_frame = client.get(f"/api/analyses/{analysis_id}/frames/10")
     assert missing_frame.status_code == 404
 
@@ -224,10 +264,12 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
 
     assert page.status_code == 200
     assert "Decision timeline" in page.text
+    assert 'data-overlay="head-value"' in page.text
     assert 'data-overlay="none"' in page.text
     assert page.headers["cache-control"] == "no-store"
     assert script.status_code == 200
     assert "importGame" in script.text
+    assert "requestHeadValue" in script.text
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
     assert 'this.overlay !== "none"' in renderer.text

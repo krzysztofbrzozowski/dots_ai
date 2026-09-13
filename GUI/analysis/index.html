@@ -10,8 +10,8 @@
     />
     <title>Dots — game analysis</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260913" />
-    <script type="module" src="/assets/analysis.js?v=20260913"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260913-head-value" />
+    <script type="module" src="/assets/analysis.js?v=20260913-head-value"></script>
   </head>
   <body>
     <header class="app-header">
@@ -59,13 +59,14 @@
         <article class="board-panel">
           <div class="panel-heading board-heading">
             <div>
-              <p class="eyebrow"><span class="section-index">02 /</span> Position before move</p>
+              <p class="eyebrow"><span class="section-index">03 /</span> Position before move</p>
               <h2 id="board-title">Board state</h2>
             </div>
 
             <div class="board-heading-actions">
               <span id="player-pill" class="player-pill">No frame</span>
               <div id="overlay-switcher" class="overlay-switcher" role="group" aria-label="Board overlay">
+                <button type="button" data-overlay="head-value" aria-pressed="false" title="Predict the outcome after a clicked legal move">Head value</button>
                 <button class="is-active" type="button" data-overlay="value" aria-pressed="true" title="Mean rollout result (Q divided by visits)">Q / N</button>
                 <button type="button" data-overlay="raw-q" aria-pressed="false" title="Saved win/loss balance">Raw Q</button>
                 <button type="button" data-overlay="visits" aria-pressed="false" title="Completed visits per action">Visits</button>
@@ -128,12 +129,31 @@
             <div><span>Visits</span><strong id="cell-visits">—</strong></div>
             <div><span>Policy</span><strong id="cell-policy">—</strong></div>
           </section>
+
+          <section id="head-value-panel" class="head-value-panel" aria-labelledby="head-value-title" hidden>
+            <div class="head-value-heading">
+              <div>
+                <p class="eyebrow">Value-head prediction</p>
+                <h3 id="head-value-title">Select a legal move</h3>
+              </div>
+              <span id="head-value-model" class="model-chip">10x10_083769_3conv_d4_normalized.keras</span>
+            </div>
+            <p id="head-value-message" class="head-value-message">
+              Click an empty legal position to evaluate the result after that move.
+            </p>
+            <div class="head-value-results" aria-label="Predicted outcome probabilities">
+              <div><span>Loss</span><strong id="head-value-loss">—</strong></div>
+              <div><span>Draw</span><strong id="head-value-draw">—</strong></div>
+              <div><span>Win</span><strong id="head-value-win">—</strong></div>
+              <div class="head-value-primary"><span>Head value</span><strong id="head-value-score">—</strong></div>
+            </div>
+          </section>
         </article>
 
         <aside class="timeline-panel" aria-labelledby="timeline-title">
           <div class="panel-heading timeline-heading">
             <div>
-              <p class="eyebrow"><span class="section-index">03 /</span> Decision timeline</p>
+              <p class="eyebrow"><span class="section-index">02 /</span> Decision timeline</p>
               <h2 id="timeline-title">Moves</h2>
             </div>
             <span id="frame-counter" class="frame-counter">0 / 0</span>
