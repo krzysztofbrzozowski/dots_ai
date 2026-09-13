@@ -1,13 +1,15 @@
 """Standalone HTTP application for the saved-game analyzer."""
 
 from pathlib import Path
+from time import perf_counter
 from urllib.parse import unquote
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from analysis.errors import AnalysisFileError
+from analysis.diagnostics import DIAGNOSTICS, PRINT_T
 from analysis.loader import MAX_UPLOAD_BYTES, load_analysis_bytes
 from analysis.service import (
     AnalysisNotFoundError,
@@ -75,12 +77,19 @@ def create_app(store=None, predictor=None):
 
     @application.exception_handler(AnalysisFileError)
     async def analysis_file_error_handler(_request, error):
+        PRINT_T(str(error), level="error", source="NPZ")
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @application.get("/api/health", include_in_schema=False)
     def health():
         """Report that the independent analysis application is running."""
         return {"status": "ready"}
+
+    @application.get("/api/diagnostics", include_in_schema=False)
+    def get_diagnostics(after: int = Query(default=0, ge=0)):
+        """Return diagnostic events created since the browser's last cursor."""
+        events, cursor = DIAGNOSTICS.read_after(after)
+        return {"events": events, "cursor": cursor}
 
     @application.post("/api/analyses", status_code=201)
     async def import_analysis(request: Request):
@@ -90,6 +99,12 @@ def create_app(store=None, predictor=None):
         file_name = unquote(encoded_file_name)
         game = load_analysis_bytes(file_bytes, file_name)
         analysis_id = analysis_store.add(game)
+        PRINT_T(
+            f"Validated {game.file_name} · schema v{game.schema_version} · "
+            f"{game.rows}x{game.cols} · {game.frame_count} frames",
+            level="success",
+            source="NPZ",
+        )
         return analysis_summary(analysis_id, game)
 
     @application.get("/api/analyses/{analysis_id}")
@@ -129,6 +144,7 @@ def create_app(store=None, predictor=None):
         col: int,
     ):
         """Evaluate one legal candidate move with the configured value head."""
+        started_at = perf_counter()
         try:
             game = analysis_store.get(analysis_id)
             if not 0 <= frame_index < game.frame_count:
@@ -149,9 +165,18 @@ def create_app(store=None, predictor=None):
                 frame_index,
                 (row, col),
             )
+            elapsed_ms = (perf_counter() - started_at) * 1000
+            PRINT_T(
+                f"{prediction['model']} · frame {frame_index + 1} · "
+                f"move ({row}, {col}) · value {prediction['value']:+.3f} · "
+                f"{elapsed_ms:.1f} ms",
+                level="success",
+                source="MODEL",
+            )
             return {
                 "frame_index": frame_index,
                 "move_number": frame_index + 1,
+                "elapsed_ms": round(elapsed_ms, 3),
                 **prediction,
             }
         except AnalysisNotFoundError as error:
@@ -165,8 +190,10 @@ def create_app(store=None, predictor=None):
                 detail=f"Frame {frame_index} does not exist in this game.",
             ) from error
         except ValueHeadUnavailableError as error:
+            PRINT_T(str(error), level="error", source="MODEL")
             raise HTTPException(status_code=503, detail=str(error)) from error
         except ValueError as error:
+            PRINT_T(str(error), level="error", source="MODEL")
             raise HTTPException(status_code=422, detail=str(error)) from error
 
     @application.delete(

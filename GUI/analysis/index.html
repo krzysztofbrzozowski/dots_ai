@@ -10,8 +10,8 @@
     />
     <title>Dots — game analysis</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260913-head-value" />
-    <script type="module" src="/assets/analysis.js?v=20260913-head-value"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260913-board-size" />
+    <script type="module" src="/assets/analysis.js?v=20260913-board-size"></script>
   </head>
   <body>
     <header class="app-header">
@@ -185,6 +185,24 @@
       <section id="status" class="status-bar" aria-live="polite" aria-atomic="true">
         <span class="status-indicator" aria-hidden="true"></span>
         <p>Ready to open a saved game. Your files stay on this computer.</p>
+      </section>
+
+      <section class="diagnostics-panel" aria-label="Diagnostics messages">
+        <header class="diagnostics-toolbar">
+          <span id="diagnostics-connection" class="diagnostics-connection"><i aria-hidden="true"></i>Live</span>
+          <div class="diagnostics-actions">
+            <button id="copy-diagnostics" type="button">Copy</button>
+            <button id="clear-diagnostics" type="button">Clear</button>
+          </div>
+        </header>
+        <div
+          id="diagnostics-output"
+          class="diagnostics-output"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-label="Analyzer diagnostic messages"
+        ></div>
       </section>
     </main>
   </body>

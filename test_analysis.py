@@ -5,7 +5,7 @@ from io import BytesIO
 import numpy as np
 from fastapi.testclient import TestClient
 
-from analysis import AnalysisFileError, load_analysis_bytes
+from analysis import AnalysisFileError, PRINT_T, load_analysis_bytes
 from analysis.server import create_app
 from analysis.service import AnalysisStore, analysis_frame, analysis_summary
 
@@ -238,6 +238,7 @@ def test_analysis_api_imports_reads_and_releases_a_game():
     assert head_value["player"] == 1
     assert head_value["model"] == "test-value-head.keras"
     assert head_value["value"] == 0.3
+    assert head_value["elapsed_ms"] >= 0
     assert predictor.calls == [("test-game", 0, (0, 1))]
 
     illegal_head_value = client.get(
@@ -264,17 +265,34 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
 
     assert page.status_code == 200
     assert "Decision timeline" in page.text
+    assert 'id="diagnostics-output"' in page.text
     assert 'data-overlay="head-value"' in page.text
     assert 'data-overlay="none"' in page.text
     assert page.headers["cache-control"] == "no-store"
     assert script.status_code == 200
     assert "importGame" in script.text
     assert "requestHeadValue" in script.text
+    assert "logDiagnostic" in script.text
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
     assert 'this.overlay !== "none"' in renderer.text
     assert renderer.headers["cache-control"] == "no-store"
     assert health.json() == {"status": "ready"}
+
+
+def test_print_t_publishes_messages_to_the_gui_diagnostic_stream():
+    event = PRINT_T("candidate", (4, 7), level="warning", source="custom")
+    client = TestClient(create_app(AnalysisStore()))
+
+    response = client.get(f"/api/diagnostics?after={event['id'] - 1}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cursor"] >= event["id"]
+    assert payload["events"][0] == event
+    assert event["message"] == "candidate (4, 7)"
+    assert event["level"] == "warning"
+    assert event["source"] == "CUSTOM"
 
 
 if __name__ == "__main__":

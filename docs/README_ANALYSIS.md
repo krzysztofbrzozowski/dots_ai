@@ -67,6 +67,24 @@ The left timeline is a vertically snapping decision wheel. It supports:
 - the Up, Down, Home, and End keys;
 - automatic playback through the saved trajectory.
 
+The compact diagnostics message panel at the bottom records file validation,
+session metadata, frame navigation, model predictions, cache hits, timing, and
+errors. **Copy** exports the visible log and **Clear** resets the browser view.
+
+Backend code can publish its own messages to this window with `PRINT_T`:
+
+```python
+from analysis import PRINT_T
+
+PRINT_T("Preparing a custom calculation")
+PRINT_T("Calculation complete", level="success", source="CUSTOM")
+```
+
+Supported levels are `info`, `success`, `warning`, and `error`. The optional
+source label identifies the subsystem. Messages are also written to the Python
+process output, and the in-memory server buffer retains the 500 most recent
+events.
+
 ## Data flow
 
 ```text
@@ -117,6 +135,7 @@ terminal board with the current game engine.
 | `GET /api/analyses/{id}` | Read game metadata and timeline descriptors |
 | `GET /api/analyses/{id}/frames/{index}` | Read one canonical decision frame |
 | `GET /api/analyses/{id}/frames/{index}/head-value?row={row}&col={col}` | Predict a legal candidate move with the configured value head |
+| `GET /api/diagnostics?after={event_id}` | Read newer `PRINT_T` diagnostic events |
 | `DELETE /api/analyses/{id}` | Release the in-memory session |
 | `GET /api/health` | Check whether the analyzer is ready |
 

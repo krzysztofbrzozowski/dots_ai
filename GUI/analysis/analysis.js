@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260913-head-value";
+} from "/shared/board_renderer.js?v=20260913-board-size";
 
 
 const elements = {
@@ -13,6 +13,7 @@ const elements = {
   emptyFileButton: document.querySelector("#open-empty-file"),
   dropTarget: document.querySelector("#drop-target"),
   dropOverlay: document.querySelector("#drop-overlay"),
+  workspace: document.querySelector(".workspace"),
   gameTitle: document.querySelector("#game-title"),
   gameSubtitle: document.querySelector("#game-subtitle"),
   summaryBoard: document.querySelector("#summary-board"),
@@ -57,6 +58,10 @@ const elements = {
   timelineList: document.querySelector("#timeline-list"),
   timelineEmpty: document.querySelector("#timeline-empty"),
   status: document.querySelector("#status"),
+  diagnosticsOutput: document.querySelector("#diagnostics-output"),
+  diagnosticsConnection: document.querySelector("#diagnostics-connection"),
+  copyDiagnostics: document.querySelector("#copy-diagnostics"),
+  clearDiagnostics: document.querySelector("#clear-diagnostics"),
 };
 
 
@@ -78,7 +83,13 @@ const view = {
   isCenteringTimeline: false,
   playTimer: null,
   dragDepth: 0,
+  diagnosticsCursor: 0,
+  diagnosticsPollTimer: null,
+  lastDiagnosticFrameKey: null,
 };
+
+
+const MAX_DIAGNOSTIC_LINES = 160;
 
 
 const boardRenderer = new DotsBoardRenderer(
@@ -104,6 +115,23 @@ const timelineResizeObserver = new ResizeObserver(() => {
   if (view.analysis) centerTimelineItem(view.frameIndex, false);
 });
 timelineResizeObserver.observe(elements.timelineWheel);
+
+
+function updateHeadValueWorkspaceHeight() {
+  if (elements.headValuePanel.hidden) return;
+  const panelStyles = getComputedStyle(elements.headValuePanel);
+  const panelSpace =
+    elements.headValuePanel.getBoundingClientRect().height +
+    Number.parseFloat(panelStyles.marginTop || "0");
+  elements.workspace.style.setProperty(
+    "--head-value-panel-space",
+    `${panelSpace}px`,
+  );
+}
+
+
+const headValueResizeObserver = new ResizeObserver(updateHeadValueWorkspaceHeight);
+headValueResizeObserver.observe(elements.headValuePanel);
 
 
 function playerName(player) {
@@ -139,6 +167,100 @@ function formatDuration(seconds) {
   if (!Number.isFinite(seconds)) return "—";
   if (seconds < 1) return `${Math.round(seconds * 1000)} ms`;
   return `${seconds.toFixed(2)} s`;
+}
+
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+}
+
+
+function diagnosticTimestamp(timestamp) {
+  const date = timestamp ? new Date(timestamp) : new Date();
+  if (Number.isNaN(date.getTime())) return "--:--:--.---";
+  const clock = date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return `${clock}.${String(date.getMilliseconds()).padStart(3, "0")}`;
+}
+
+
+function logDiagnostic(message, { level = "info", source = "UI", timestamp } = {}) {
+  const wasAtBottom =
+    elements.diagnosticsOutput.scrollHeight -
+      elements.diagnosticsOutput.scrollTop -
+      elements.diagnosticsOutput.clientHeight < 24;
+  const line = document.createElement("div");
+  const time = document.createElement("time");
+  const severity = document.createElement("span");
+  const scope = document.createElement("span");
+  const contents = document.createElement("span");
+
+  line.className = `diagnostic-line is-${level}`;
+  time.textContent = diagnosticTimestamp(timestamp);
+  severity.textContent = level.toUpperCase();
+  scope.textContent = String(source).toUpperCase();
+  contents.textContent = String(message);
+  line.dataset.plainText =
+    `${time.textContent} ${severity.textContent.padEnd(7)} ` +
+    `${scope.textContent.padEnd(8)} ${contents.textContent}`;
+  line.append(time, severity, scope, contents);
+  elements.diagnosticsOutput.append(line);
+
+  while (elements.diagnosticsOutput.childElementCount > MAX_DIAGNOSTIC_LINES) {
+    elements.diagnosticsOutput.firstElementChild.remove();
+  }
+  if (wasAtBottom) {
+    elements.diagnosticsOutput.scrollTop = elements.diagnosticsOutput.scrollHeight;
+  }
+}
+
+
+function logAnalysisMetadata(game) {
+  logDiagnostic(
+    `game ${game.game_id} · schema v${game.schema_version} · ` +
+      `${game.board.rows}x${game.board.cols} · ${game.frame_count} frames`,
+    { level: "success", source: "SESSION" },
+  );
+  logDiagnostic(
+    `Q perspective ${game.q_perspective} · result perspective ` +
+      `${game.final_result_perspective} · batch ${game.search.rollout_batch_size}`,
+    { source: "DATA" },
+  );
+  logDiagnostic(
+    `${formatInteger(game.search.total_rollouts)} rollouts · ` +
+      `${formatDuration(game.search.total_elapsed_seconds)} total · ` +
+      `${formatInteger(Math.round(game.search.average_rollouts_per_second))}/s average`,
+    { source: "SEARCH" },
+  );
+}
+
+
+async function pollDiagnostics() {
+  try {
+    const response = await fetch(
+      `/api/diagnostics?after=${view.diagnosticsCursor}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) throw new Error(`Diagnostics returned HTTP ${response.status}`);
+    const payload = await response.json();
+    for (const event of payload.events) {
+      logDiagnostic(event.message, event);
+    }
+    view.diagnosticsCursor = payload.cursor;
+    elements.diagnosticsConnection.classList.remove("is-delayed");
+    elements.diagnosticsConnection.lastChild.textContent = "Live";
+  } catch (_error) {
+    elements.diagnosticsConnection.classList.add("is-delayed");
+    elements.diagnosticsConnection.lastChild.textContent = "Retrying";
+  } finally {
+    view.diagnosticsPollTimer = window.setTimeout(pollDiagnostics, 900);
+  }
 }
 
 
@@ -215,8 +337,16 @@ async function requestHeadValue(cell) {
   const frameIndex = view.frameIndex;
   const [row, col] = cell;
   const cacheKey = `${view.analysis.analysis_id}:${frameIndex}:${row}:${col}`;
+  const startedAt = performance.now();
+  const isCached = view.headValueCache.has(cacheKey);
   cancelHeadValuePrediction();
   const requestNumber = view.headValueRequestNumber;
+
+  logDiagnostic(
+    `${isCached ? "cache lookup" : "predict"} · frame ${frameIndex + 1} · ` +
+      `move ${formatCoordinate(cell)}`,
+    { source: "MODEL" },
+  );
 
   elements.headValuePanel.classList.remove("is-error", "is-positive", "is-negative");
   elements.headValuePanel.classList.add("is-loading");
@@ -247,12 +377,28 @@ async function requestHeadValue(cell) {
     if (requestNumber !== view.headValueRequestNumber) return;
     view.headValueController = null;
     displayHeadValuePrediction(prediction);
+    const roundTripMs = performance.now() - startedAt;
+    const timing = isCached
+      ? "cache hit"
+      : Number.isFinite(prediction.elapsed_ms)
+        ? `${prediction.elapsed_ms.toFixed(1)} ms server · ${roundTripMs.toFixed(1)} ms round trip`
+        : `${roundTripMs.toFixed(1)} ms round trip`;
+    logDiagnostic(
+      `${prediction.model} · value ${formatDecimal(prediction.value, 3, true)} · ` +
+        `L/D/W ${(prediction.loss * 100).toFixed(1)}/` +
+        `${(prediction.draw * 100).toFixed(1)}/${(prediction.win * 100).toFixed(1)}% · ${timing}`,
+      { level: "success", source: "MODEL" },
+    );
   } catch (error) {
     if (error.name === "AbortError" || requestNumber !== view.headValueRequestNumber) {
       return;
     }
     view.headValueController = null;
     showHeadValueError(cell, error.message || "The value-head prediction failed.");
+    logDiagnostic(
+      error.message || "The value-head prediction failed.",
+      { level: "error", source: "MODEL" },
+    );
   }
 }
 
@@ -269,6 +415,10 @@ async function importGame(file) {
   elements.gameTitle.textContent = file.name;
   elements.gameSubtitle.textContent = "Validating the saved trajectory…";
   showStatus(`Reading ${file.name}…`, "busy");
+  logDiagnostic(
+    `reading ${file.name} · ${formatFileSize(file.size)}`,
+    { source: "NPZ" },
+  );
 
   try {
     const response = await fetch("/api/analyses", {
@@ -292,12 +442,14 @@ async function importGame(file) {
     view.requestNumber += 1;
     view.frameCache.clear();
     view.pendingFrames.clear();
+    view.lastDiagnosticFrameKey = null;
     cancelHeadValuePrediction();
     view.headValueCache.clear();
     resetHeadValuePanel();
 
     updateGameOverview();
     buildTimeline();
+    logAnalysisMetadata(payload);
     await selectFrame(0, { centerTimeline: true, smooth: false });
     showStatus(
       `Loaded ${payload.frame_count} decision frames from ${payload.file_name}.`,
@@ -313,6 +465,10 @@ async function importGame(file) {
   } catch (error) {
     elements.gameSubtitle.textContent = "The selected file was not loaded.";
     showStatus(error.message || "Could not read the selected game.", "error");
+    logDiagnostic(
+      error.message || "Could not read the selected game.",
+      { level: "error", source: "NPZ" },
+    );
   } finally {
     view.importing = false;
     elements.fileInput.value = "";
@@ -472,9 +628,25 @@ async function selectFrame(
       `Before move ${frame.move_number}: ${playerName(frame.player_to_move)} selected ` +
       `${formatCoordinate(frame.selected_action)} after ${formatInteger(frame.completed_rollouts)} rollouts.`,
     );
+    const diagnosticFrameKey = `${view.analysis.analysis_id}:${frameIndex}`;
+    if (view.lastDiagnosticFrameKey !== diagnosticFrameKey) {
+      view.lastDiagnosticFrameKey = diagnosticFrameKey;
+      logDiagnostic(
+        `move ${frame.move_number}/${view.analysis.frame_count} · ` +
+          `${playerName(frame.player_to_move)} · action ` +
+          `${formatCoordinate(frame.selected_action)} · ` +
+          `${formatInteger(frame.completed_rollouts)} rollouts · ` +
+          `${formatDuration(frame.elapsed_seconds)}`,
+        { source: "FRAME" },
+      );
+    }
   } catch (error) {
     if (requestNumber !== view.requestNumber) return;
     showStatus(error.message || "Could not read the selected frame.", "error");
+    logDiagnostic(
+      error.message || "Could not read the selected frame.",
+      { level: "error", source: "FRAME" },
+    );
   }
 }
 
@@ -570,7 +742,13 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
 
   if (view.overlay === "head-value" && runHeadValuePrediction) {
     if (isLegal) requestHeadValue(cell);
-    else showHeadValueError(cell, "Choose an empty position marked as legal.");
+    else {
+      showHeadValueError(cell, "Choose an empty position marked as legal.");
+      logDiagnostic(
+        `rejected move ${formatCoordinate(cell)} · position is not legal`,
+        { level: "warning", source: "MODEL" },
+      );
+    }
   }
 }
 
@@ -726,6 +904,7 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
   elements.scaleLow.textContent = isSequential ? "Low" : "Negative";
   elements.scaleHigh.textContent = isSequential ? "High" : "Positive";
   elements.headValuePanel.hidden = !isHeadValue;
+  if (isHeadValue) updateHeadValueWorkspaceHeight();
   cancelHeadValuePrediction();
   if (isHeadValue) {
     resetHeadValuePanel(
@@ -796,3 +975,38 @@ elements.dropTarget.addEventListener("drop", (event) => {
   const droppedFile = event.dataTransfer.files[0];
   if (droppedFile) importGame(droppedFile);
 });
+
+
+elements.clearDiagnostics.addEventListener("click", () => {
+  elements.diagnosticsOutput.replaceChildren();
+  logDiagnostic("diagnostic buffer cleared", { source: "SYSTEM" });
+});
+
+
+elements.copyDiagnostics.addEventListener("click", async () => {
+  try {
+    const plainText = [...elements.diagnosticsOutput.children]
+      .map((line) => line.dataset.plainText)
+      .join("\n");
+    await navigator.clipboard.writeText(plainText);
+    elements.copyDiagnostics.textContent = "Copied";
+    window.setTimeout(() => {
+      elements.copyDiagnostics.textContent = "Copy";
+    }, 1200);
+  } catch (error) {
+    logDiagnostic(
+      error.message || "Could not copy diagnostics.",
+      { level: "error", source: "SYSTEM" },
+    );
+  }
+});
+
+
+logDiagnostic("analysis workspace ready · waiting for a saved game", {
+  level: "success",
+  source: "SYSTEM",
+});
+logDiagnostic("Python hook ready · from analysis import PRINT_T", {
+  source: "SYSTEM",
+});
+pollDiagnostics();
