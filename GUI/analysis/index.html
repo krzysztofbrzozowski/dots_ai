@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f2f2f7" />
+    <meta name="theme-color" content="#191520" />
     <meta
       name="description"
       content="Inspect the timeline and MCTS search data stored in a Dots NPZ game."
     />
     <title>Dots — game analysis</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260829" />
-    <script type="module" src="/assets/analysis.js?v=20260829"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260913" />
+    <script type="module" src="/assets/analysis.js?v=20260913"></script>
   </head>
   <body>
     <header class="app-header">
@@ -19,14 +19,17 @@
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <div>
           <h1>Dots</h1>
-          <p>Search analysis</p>
+          <p>Analysis lab</p>
         </div>
       </div>
 
-      <label id="file-button" class="file-button" for="npz-file">
-        <input id="npz-file" type="file" accept=".npz,application/octet-stream" />
-        <span>Open NPZ game</span>
-      </label>
+      <div class="header-actions">
+        <span class="local-badge"><i aria-hidden="true"></i>Local workspace</span>
+        <label id="file-button" class="file-button" for="npz-file">
+          <input id="npz-file" type="file" accept=".npz,application/octet-stream" />
+          <span>Open NPZ game</span>
+        </label>
+      </div>
     </header>
 
     <main id="drop-target" class="analysis-shell">
@@ -37,10 +40,10 @@
 
       <section class="game-overview" aria-labelledby="game-title">
         <div class="game-identity">
-          <p class="eyebrow">Saved self-play trajectory</p>
-          <h2 id="game-title">Choose a game to begin</h2>
+          <p class="eyebrow"><span class="section-index">01 /</span> Saved self-play trajectory</p>
+          <h2 id="game-title">Every move, decoded.</h2>
           <p id="game-subtitle" class="game-subtitle">
-            The game remains on your computer and is read by this local analyzer.
+            Explore the board. Trace the search. Understand the decision.
           </p>
         </div>
 
@@ -56,18 +59,18 @@
         <article class="board-panel">
           <div class="panel-heading board-heading">
             <div>
-              <p class="eyebrow">Position before move</p>
+              <p class="eyebrow"><span class="section-index">02 /</span> Position before move</p>
               <h2 id="board-title">Board state</h2>
             </div>
 
             <div class="board-heading-actions">
               <span id="player-pill" class="player-pill">No frame</span>
-              <div id="overlay-switcher" class="overlay-switcher" aria-label="Board overlay">
-                <button class="is-active" type="button" data-overlay="value">Q / N</button>
-                <button type="button" data-overlay="raw-q">Raw Q</button>
-                <button type="button" data-overlay="visits">Visits</button>
-                <button type="button" data-overlay="policy">Policy</button>
-                <button type="button" data-overlay="none">None</button>
+              <div id="overlay-switcher" class="overlay-switcher" role="group" aria-label="Board overlay">
+                <button class="is-active" type="button" data-overlay="value" aria-pressed="true" title="Mean rollout result (Q divided by visits)">Q / N</button>
+                <button type="button" data-overlay="raw-q" aria-pressed="false" title="Saved win/loss balance">Raw Q</button>
+                <button type="button" data-overlay="visits" aria-pressed="false" title="Completed visits per action">Visits</button>
+                <button type="button" data-overlay="policy" aria-pressed="false" title="Share of visits per action">Policy</button>
+                <button type="button" data-overlay="none" aria-pressed="false" title="Show only the board and placed dots">None</button>
               </div>
             </div>
           </div>
@@ -81,10 +84,13 @@
               Your browser does not support HTML Canvas.
             </canvas>
             <div id="board-empty" class="board-empty">
-              <div class="placeholder-grid" aria-hidden="true"></div>
-              <div>
-                <strong>Select an NPZ file</strong>
-                <p>Dots, territory, legal actions and search values will appear here.</p>
+              <img class="network-art" src="/assets/network.svg" alt="" aria-hidden="true" />
+              <div class="empty-content">
+                <span class="empty-kicker">A closer look at the search</span>
+                <strong>From possibilities<br />to the next move.</strong>
+                <p>Open a saved game to explore every position, rollout and decision.</p>
+                <button id="open-empty-file" class="empty-file-button" type="button">Choose a game <span aria-hidden="true">↗</span></button>
+                <small>or drop an .npz file onto this workspace</small>
               </div>
             </div>
           </div>
@@ -94,7 +100,11 @@
             <span><i class="legend-dot player-two"></i>Player 2</span>
             <span><i class="legend-ring selected"></i>Selected action</span>
             <span><i class="legend-ring unvisited"></i>Unvisited legal action</span>
-            <span class="perspective-note">Values use the player-to-move perspective.</span>
+          </div>
+
+          <div class="overlay-caption">
+            <span id="overlay-description">Mean result · player-to-move perspective</span>
+            <span id="overlay-scale" class="overlay-scale"><span id="scale-low">Negative</span><i aria-hidden="true"></i><span id="scale-high">Positive</span></span>
           </div>
 
           <section class="frame-summary" aria-label="Current search summary">
@@ -123,7 +133,7 @@
         <aside class="timeline-panel" aria-labelledby="timeline-title">
           <div class="panel-heading timeline-heading">
             <div>
-              <p class="eyebrow">Decision timeline</p>
+              <p class="eyebrow"><span class="section-index">03 /</span> Decision timeline</p>
               <h2 id="timeline-title">Moves</h2>
             </div>
             <span id="frame-counter" class="frame-counter">0 / 0</span>
@@ -139,21 +149,22 @@
             <div class="timeline-focus" aria-hidden="true"></div>
             <ol id="timeline-list" class="timeline-list"></ol>
             <div id="timeline-empty" class="timeline-empty">
-              <strong>No game loaded</strong>
-              <span>Timeline frames will appear here.</span>
+              <div class="timeline-placeholder" aria-hidden="true"><i></i><i></i><i></i></div>
+              <strong>Your decision trail</strong>
+              <span>Move by move, the story<br />of the search appears here.</span>
             </div>
           </div>
 
           <div class="timeline-help">
             <span>Scroll or drag</span>
-            <span>Keyboard ↑ ↓</span>
+            <span><kbd>↑</kbd> <kbd>↓</kbd> to navigate</span>
           </div>
         </aside>
       </section>
 
       <section id="status" class="status-bar" aria-live="polite" aria-atomic="true">
         <span class="status-indicator" aria-hidden="true"></span>
-        <p>Ready to open a saved game.</p>
+        <p>Ready to open a saved game. Your files stay on this computer.</p>
       </section>
     </main>
   </body>

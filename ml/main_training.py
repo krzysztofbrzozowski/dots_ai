@@ -5,19 +5,19 @@ import matplotlib.pyplot as plt
 
 # --- START DATA LOADING
 # Add temporary directory above current ml directory to the Path
-# Possible to run main_ml.py as regular file
+# Possible to run main_training.py as regular file
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "10x10_64322_5conv_d4_normalized.keras"
+    / "10x10_083769_3conv_d4_normalized.keras"
 )
 HISTORY_PATH = (
     PROJECT_ROOT
     / "docs"
     / "imgs"
-    / "training_history_10x10_64322_5conv_d4_normalized.png"
+    / "training_history_10x10_083769_3conv_d4_normalized.png"
 )
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -29,7 +29,7 @@ from ml.training_pipeline import batched_array_dataset, random_d4_augmentation
     (val_inputs, val_labels),
     (test_inputs, test_labels),
 ) = load_training_data(
-    PROJECT_ROOT / "training_data" / "_game_arena_data_collection" / "10x10_64322",
+    PROJECT_ROOT / "training_data" / "_game_arena_data_collection" / "10x10_083769",
     validation_fraction=0.2,
     test_fraction=0.1,
 )
@@ -37,8 +37,8 @@ from ml.training_pipeline import batched_array_dataset, random_d4_augmentation
 # --- ADD DATA AUGMENTATION
 import tensorflow as tf
 
-BATCH_SIZE = 4096
-EPOCHS = 30
+BATCH_SIZE = 2048
+EPOCHS = 20
 
 # Keep array-to-tensor conversion batch-sized so the large NumPy dataset is not
 # duplicated in memory. Shuffling happens again whenever a new epoch starts.
@@ -112,7 +112,7 @@ x = layers.Conv2D(filters=32, kernel_size=2, use_bias=False)(board_inputs)
 # depth. Each block consists of two batch-normalized depthwise
 # separable convolution layers and a max pooling layer, with a residual
 # connection around the entire block.
-for size in [8, 16]:
+for size in [32, 32]:
     residual = x
 
     x = layers.BatchNormalization()(x)

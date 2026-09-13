@@ -4,12 +4,13 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260829";
+} from "/shared/board_renderer.js?v=20260913";
 
 
 const elements = {
   fileInput: document.querySelector("#npz-file"),
   fileButton: document.querySelector("#file-button"),
+  emptyFileButton: document.querySelector("#open-empty-file"),
   dropTarget: document.querySelector("#drop-target"),
   dropOverlay: document.querySelector("#drop-overlay"),
   gameTitle: document.querySelector("#game-title"),
@@ -23,6 +24,10 @@ const elements = {
   boardEmpty: document.querySelector("#board-empty"),
   playerPill: document.querySelector("#player-pill"),
   overlaySwitcher: document.querySelector("#overlay-switcher"),
+  overlayDescription: document.querySelector("#overlay-description"),
+  overlayScale: document.querySelector("#overlay-scale"),
+  scaleLow: document.querySelector("#scale-low"),
+  scaleHigh: document.querySelector("#scale-high"),
   frameAction: document.querySelector("#frame-action"),
   frameScore: document.querySelector("#frame-score"),
   frameLegal: document.querySelector("#frame-legal"),
@@ -146,6 +151,8 @@ async function importGame(file) {
   view.importing = true;
   stopPlayback();
   elements.fileButton.classList.add("is-busy");
+  elements.fileInput.disabled = true;
+  elements.emptyFileButton.disabled = true;
   elements.fileButton.querySelector("span").textContent = "Reading game…";
   elements.gameTitle.textContent = file.name;
   elements.gameSubtitle.textContent = "Validating the saved trajectory…";
@@ -195,6 +202,8 @@ async function importGame(file) {
     view.importing = false;
     elements.fileInput.value = "";
     elements.fileButton.classList.remove("is-busy");
+    elements.fileInput.disabled = false;
+    elements.emptyFileButton.disabled = false;
     elements.fileButton.querySelector("span").textContent = view.analysis
       ? "Open another game"
       : "Open NPZ game";
@@ -204,6 +213,7 @@ async function importGame(file) {
 
 function updateGameOverview() {
   const game = view.analysis;
+  elements.dropTarget.classList.add("has-analysis");
   const createdAt = new Date(game.created_at_utc);
   const createdLabel = Number.isNaN(createdAt.getTime())
     ? game.created_at_utc
@@ -212,10 +222,11 @@ function updateGameOverview() {
         timeStyle: "short",
       });
   const searchBudget = game.search.budget_type === "seconds"
-    ? `${game.search.requested_simulation_seconds} s per move`
+    ? `${formatDuration(game.search.requested_simulation_seconds)} per move`
     : `${formatInteger(game.search.requested_simulations)} simulations per move`;
 
   elements.gameTitle.textContent = game.file_name;
+  elements.gameTitle.title = game.file_name;
   elements.gameSubtitle.textContent =
     `${createdLabel} · ${searchBudget} · ` +
     `${formatInteger(game.search.total_rollouts)} total rollouts`;
@@ -382,6 +393,9 @@ function updateFrameDisplay() {
   elements.frameElapsed.textContent = formatDuration(frame.elapsed_seconds);
   elements.frameThroughput.textContent =
     `${formatInteger(Math.round(frame.rollouts_per_second))} / s`;
+  for (const metric of document.querySelectorAll(".frame-summary strong")) {
+    metric.title = metric.textContent;
+  }
 
   elements.board.setAttribute(
     "aria-label",
@@ -457,9 +471,15 @@ function centerTimelineItem(frameIndex, smooth) {
 
   view.isCenteringTimeline = true;
   window.clearTimeout(view.centeringTimer);
-  item.scrollIntoView({
-    behavior: smooth ? "smooth" : "auto",
-    block: "center",
+  const wheel = elements.timelineWheel;
+  const itemBounds = item.getBoundingClientRect();
+  const wheelBounds = wheel.getBoundingClientRect();
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Center inside the timeline without scrolling the surrounding workspace.
+  wheel.scrollTo({
+    top: wheel.scrollTop + itemBounds.top - wheelBounds.top -
+      wheel.clientTop - (wheel.clientHeight - itemBounds.height) / 2,
+    behavior: smooth && !reduceMotion ? "smooth" : "instant",
   });
   view.centeringTimer = window.setTimeout(() => {
     view.isCenteringTimeline = false;
@@ -556,6 +576,8 @@ elements.fileInput.addEventListener("change", () => {
   if (selectedFile) importGame(selectedFile);
 });
 
+elements.emptyFileButton.addEventListener("click", () => elements.fileInput.click());
+
 
 elements.overlaySwitcher.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-overlay]");
@@ -564,7 +586,21 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
   view.overlay = button.dataset.overlay;
   for (const overlayButton of elements.overlaySwitcher.querySelectorAll("button")) {
     overlayButton.classList.toggle("is-active", overlayButton === button);
+    overlayButton.setAttribute("aria-pressed", String(overlayButton === button));
   }
+  const descriptions = {
+    value: "Mean result · player-to-move perspective",
+    "raw-q": "Win/loss balance · player-to-move perspective",
+    visits: "Completed visits · brighter means more visits",
+    policy: "Share of visits · brighter means higher probability",
+    none: "Board and placed dots · search overlays hidden",
+  };
+  const isSequential = view.overlay === "visits" || view.overlay === "policy";
+  elements.overlayDescription.textContent = descriptions[view.overlay];
+  elements.overlayScale.hidden = view.overlay === "none";
+  elements.overlayScale.classList.toggle("is-sequential", isSequential);
+  elements.scaleLow.textContent = isSequential ? "Low" : "Negative";
+  elements.scaleHigh.textContent = isSequential ? "High" : "Positive";
   boardRenderer.setOverlay(view.overlay);
 });
 

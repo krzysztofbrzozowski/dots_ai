@@ -26,7 +26,7 @@ SIMULATION_SECONDS = 30
 DEFAULT_MCTS_WORKERS = os.cpu_count()
 TRAINING_DATA_DIRECTORY = Path(__file__).resolve().parent / "training_data"
 
-
+# Main runner for MCTS game
 def run_mcts_game(
     board_state,
     simulations_number=DEFAULT_SIMULATIONS,
@@ -37,7 +37,9 @@ def run_mcts_game(
     rollout_batch_size=1,
     training_data_directory=None,
 ):
-    """Run one game and optionally save its played self-play trajectory"""
+    """
+    Run one game and optionally save its played self-play trajectory
+    """
     if simulations_number <= 0:
         raise ValueError("simulations_number must be positive")
     if move_delay < 0:
@@ -46,6 +48,8 @@ def run_mcts_game(
         raise ValueError("simulation_seconds must be positive or None")
 
     move_number = 0
+    # Trajectory -> a sequence of states to be saved
+    # currently used as data to verify moves (main_analysis.py) and train model
     trajectory = (
         SelfPlayTrajectory(
             simulation_seconds=simulation_seconds,
@@ -72,6 +76,7 @@ def run_mcts_game(
         else:
             best_node = mcts.best_action(total_simulation_seconds=simulation_seconds)
 
+        # Print search statistics for this move
         stats = mcts.last_search_stats
         print(
             f"MCTS move {move_number + 1}: "
@@ -113,7 +118,11 @@ def run_mcts_game(
 
     return board_state
 
-
+# Run the game in 2 options:
+# if workers == 1 
+#   → run_mcts_game() as sequential search
+# else (when workers more than 1)
+#   → run_mcts_game() as parallel search with ProcessPoolExecutor
 def run_parallel_mcts_game(
     board_state,
     simulations_number=DEFAULT_SIMULATIONS,
@@ -123,7 +132,6 @@ def run_parallel_mcts_game(
     workers=DEFAULT_MCTS_WORKERS,
     training_data_directory=None,
 ):
-    """Run a game using one persistent process pool for all MCTS moves"""
     if isinstance(workers, bool) or not isinstance(workers, int):
         raise TypeError("workers must be an integer")
     if workers <= 0:
@@ -139,6 +147,9 @@ def run_parallel_mcts_game(
             training_data_directory=training_data_directory,
         )
 
+    # When workers > 1 
+    #   -> we run rollouts in parallel using a ProcessPoolExecutor
+    # Info:
     # ``spawn`` is safe when this function runs in the GUI's game thread and
     # behaves consistently across macOS, Linux, and Windows.
     # Creating separate processes to run rollouts in parallel on independent CPU

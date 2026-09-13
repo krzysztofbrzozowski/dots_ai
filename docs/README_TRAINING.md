@@ -240,6 +240,12 @@ outputs = layers.Dense(3, activation="softmax")(x)
 Test loss: 0.781
 Test accuracy: 0.603
 
+### 83769 training data -> 3 conv layers, batch_size=2048, epochs=20
+
+![alt text](imgs/training_history_10x10_083769_3conv_d4_normalized.png)
+Test loss: 0.779
+Test accuracy: 0.603
+
 ## Value-model data relabeling plan
 
 ### Why the next experiment focuses on data

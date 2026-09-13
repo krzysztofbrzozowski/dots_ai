@@ -115,7 +115,7 @@ def predict_move(model, state, move):
 def main():
     import keras
 
-    # This loads the checkpoint saved by main_ml.py; no training is started.
+    # This loads the checkpoint saved by main_training.py; no training is started.
     test_model = keras.models.load_model(MODEL_PATH, compile=False)
 
     # Build the position BEFORE the candidate move using zero-based coordinates.

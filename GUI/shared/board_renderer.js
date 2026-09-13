@@ -308,7 +308,7 @@ export class DotsBoardRenderer {
     }
     this.context.textAlign = "right";
     for (let row = 0; row < rows; row += 1) {
-      this.context.fillText(String(row), originX - 16, originY + row * step);
+      this.context.fillText(String(row), originX - 26, originY + row * step);
     }
   }
 
@@ -327,12 +327,25 @@ export class DotsBoardRenderer {
         if (this.frame.territory[row][col] !== 0) {
           this.context.globalAlpha = 0.42;
         }
-        this.context.fillStyle = cssColor(
+        const dotColor = cssColor(
           player === PLAYER_1 ? "--player-one" : "--player-two",
         );
+        const highlight = cssColor(
+          player === PLAYER_1 ? "--player-one-highlight" : "--player-two-highlight",
+        ) || dotColor;
+        const dotGradient = this.context.createRadialGradient(
+          x - dotRadius * 0.35, y - dotRadius * 0.4, 0,
+          x, y, dotRadius,
+        );
+        dotGradient.addColorStop(0, highlight);
+        dotGradient.addColorStop(1, dotColor);
+        this.context.fillStyle = dotGradient;
+        this.context.shadowColor = dotColor;
+        this.context.shadowBlur = 8;
         this.context.beginPath();
         this.context.arc(x, y, dotRadius, 0, Math.PI * 2);
         this.context.fill();
+        this.context.shadowBlur = 0;
         this.context.strokeStyle = cssColor("--board-surface");
         this.context.lineWidth = 2;
         this.context.stroke();

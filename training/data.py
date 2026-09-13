@@ -25,7 +25,7 @@ _FILENAME_PREFIX_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class SelfPlayTrajectory:
-    """Buffer the actual states and root statistics from one played game."""
+    """Buffer the actual states and root statistics from one played game"""
 
     def __init__(
         self,

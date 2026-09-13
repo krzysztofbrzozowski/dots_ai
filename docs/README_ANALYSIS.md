@@ -25,6 +25,15 @@ persist the file.
 
 ## What the interface shows
 
+The analysis workspace uses a dark plum theme with pink Player 1 dots and cyan
+Player 2 dots. A warm gold ring marks the selected action. Search values use a
+pink-to-cyan scale for negative-to-positive results and a cyan intensity scale
+for visits and policy. The legend updates with the selected overlay.
+
+The board and timeline sit side by side on desktop and stack on narrow screens.
+Keyboard focus is visible, and timeline transitions respect reduced-motion
+preferences. Theme colors are centralized in `GUI/analysis/analysis.css`.
+
 The center board renders the state before the selected move. Four search
 overlays are available:
 
@@ -99,4 +108,3 @@ The request body for `POST /api/analyses` is the NPZ byte stream. The original
 file name is URL-encoded in the `X-File-Name` header. Uploads are limited to
 32 MB compressed and 256 MB uncompressed. At most four recent games are kept
 in memory.
-

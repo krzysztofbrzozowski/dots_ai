@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" fill="none">
+<defs>
+  <linearGradient id="signal"><stop stop-color="#ec8bb8"/><stop offset=".5" stop-color="#a295d4"/><stop offset="1" stop-color="#79dce8"/></linearGradient>
+  <linearGradient id="node"><stop stop-color="#79dce8"/><stop offset=".45" stop-color="#b6a5dc"/><stop offset=".7" stop-color="#ec8bb8"/><stop offset="1" stop-color="#ffc5df"/></linearGradient>
+  <radialGradient id="fade"><stop stop-color="white" stop-opacity="0"/><stop offset=".48" stop-color="white" stop-opacity=".05"/><stop offset=".8" stop-color="white" stop-opacity=".7"/><stop offset="1" stop-color="white"/></radialGradient>
+  <mask id="edges"><rect width="1000" height="560" fill="url(#fade)"/></mask>
+</defs>
+<g mask="url(#edges)">
+<path d="M-70 -35 C190 -135 190 595 470 500 S820 40 1090 25" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 -13 C190 -113 190 573 470 490 S820 53 1090 47" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 9 C190 -91 190 551 470 480 S820 66 1090 69" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 31 C190 -69 190 529 470 470 S820 79 1090 91" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 53 C190 -47 190 507 470 460 S820 92 1090 113" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 75 C190 -25 190 485 470 450 S820 105 1090 135" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 97 C190 -3 190 463 470 440 S820 118 1090 157" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 119 C190 19 190 441 470 430 S820 131 1090 179" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 141 C190 41 190 419 470 420 S820 144 1090 201" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 163 C190 63 190 397 470 410 S820 157 1090 223" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 185 C190 85 190 375 470 400 S820 170 1090 245" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 207 C190 107 190 353 470 390 S820 183 1090 267" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 229 C190 129 190 331 470 380 S820 196 1090 289" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 251 C190 151 190 309 470 370 S820 209 1090 311" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 273 C190 173 190 287 470 360 S820 222 1090 333" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 295 C190 195 190 265 470 350 S820 235 1090 355" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 317 C190 217 190 243 470 340 S820 248 1090 377" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 339 C190 239 190 221 470 330 S820 261 1090 399" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 361 C190 261 190 199 470 320 S820 274 1090 421" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 383 C190 283 190 177 470 310 S820 287 1090 443" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 405 C190 305 190 155 470 300 S820 300 1090 465" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 427 C190 327 190 133 470 290 S820 313 1090 487" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 449 C190 349 190 111 470 280 S820 326 1090 509" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M-70 471 C190 371 190 89 470 270 S820 339 1090 531" stroke="url(#signal)" stroke-width=".8" stroke-dasharray="1 5" opacity=".52"/>
+<path d="M82 120L235 70" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 120L235 170" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 120L235 270" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 120L235 370" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 120L235 470" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 190L235 70" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 190L235 170" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 190L235 270" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 190L235 370" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 190L235 470" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 260L235 70" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 260L235 170" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 260L235 270" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 260L235 370" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 260L235 470" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 330L235 70" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 330L235 170" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 330L235 270" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 330L235 370" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 330L235 470" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 400L235 70" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 400L235 170" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 400L235 270" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 400L235 370" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 400L235 470" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 90L918 160" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 90L918 240" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 90L918 320" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 90L918 400" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 190L918 160" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 190L918 240" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 190L918 320" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 190L918 400" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 290L918 160" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 290L918 240" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 290L918 320" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 290L918 400" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 390L918 160" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 390L918 240" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 390L918 320" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 390L918 400" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 490L918 160" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 490L918 240" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 490L918 320" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M765 490L918 400" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
+<path d="M82 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<circle cx="82" cy="120" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="120" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="82" cy="190" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="190" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="82" cy="260" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="260" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="82" cy="330" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="330" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="82" cy="400" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="400" r="7" fill="url(#node)" opacity=".78"/>
+<path d="M235 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<circle cx="235" cy="70" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="70" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="235" cy="170" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="170" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="235" cy="270" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="270" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="235" cy="370" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="370" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="235" cy="470" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="470" r="7" fill="url(#node)" opacity=".78"/>
+<path d="M765 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<circle cx="765" cy="90" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="90" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="765" cy="190" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="190" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="765" cy="290" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="290" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="765" cy="390" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="390" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="765" cy="490" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="490" r="7" fill="url(#node)" opacity=".78"/>
+<path d="M918 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<circle cx="918" cy="160" r="14" fill="url(#node)" opacity=".08"/><circle cx="918" cy="160" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="918" cy="240" r="14" fill="url(#node)" opacity=".08"/><circle cx="918" cy="240" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="918" cy="320" r="14" fill="url(#node)" opacity=".08"/><circle cx="918" cy="320" r="7" fill="url(#node)" opacity=".78"/>
+<circle cx="918" cy="400" r="14" fill="url(#node)" opacity=".08"/><circle cx="918" cy="400" r="7" fill="url(#node)" opacity=".78"/>
+</g></svg>
