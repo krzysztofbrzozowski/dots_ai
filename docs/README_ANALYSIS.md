@@ -23,6 +23,12 @@ Use **Open NPZ game** or drag an `.npz` file onto the page. The browser sends
 the selected bytes only to this local server. The analyzer does not modify or
 persist the file.
 
+After a frame is loaded, the camera button in the top bar downloads the current
+board as a 1600 × 1600 PNG. The export includes the active overlay, the saved
+action, and the currently selected cell. The board is rendered directly into
+the square with a comfortable inset similar to the analysis view, without
+stretching the grid.
+
 ## What the interface shows
 
 The analysis workspace pairs an off-white page and header with dark plum board

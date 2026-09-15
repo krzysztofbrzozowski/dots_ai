@@ -11,13 +11,13 @@ MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "10x10_083769_3conv_d4_normalized.keras"
+    / "10x10_083769_residual.keras"
 )
 HISTORY_PATH = (
     PROJECT_ROOT
     / "docs"
     / "imgs"
-    / "training_history_10x10_083769_3conv_d4_normalized.png"
+    / "training_history_10x10_083769_residual.png"
 )
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -38,7 +38,7 @@ from ml.training_pipeline import batched_array_dataset, random_d4_augmentation
 import tensorflow as tf
 
 BATCH_SIZE = 2048
-EPOCHS = 20
+EPOCHS = 50
 
 # Keep array-to-tensor conversion batch-sized so the large NumPy dataset is not
 # duplicated in memory. Shuffling happens again whenever a new epoch starts.

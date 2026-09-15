@@ -266,6 +266,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert page.status_code == 200
     assert "Decision timeline" in page.text
     assert 'id="diagnostics-output"' in page.text
+    assert 'id="screenshot-button"' in page.text
     assert 'data-overlay="head-value"' in page.text
     assert 'data-overlay="none"' in page.text
     assert page.headers["cache-control"] == "no-store"
@@ -273,8 +274,10 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert "importGame" in script.text
     assert "requestHeadValue" in script.text
     assert "logDiagnostic" in script.text
+    assert "downloadSquareScreenshot" in script.text
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
+    assert "renderSquareCanvas" in renderer.text
     assert 'this.overlay !== "none"' in renderer.text
     assert renderer.headers["cache-control"] == "no-store"
     assert health.json() == {"status": "ready"}

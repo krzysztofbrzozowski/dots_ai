@@ -17,7 +17,7 @@ MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "10x10_083769_3conv_d4_normalized.keras"
+    / "10x10_083769_residual.keras"
 )
 # --- END PATHS AND SETTINGS
 

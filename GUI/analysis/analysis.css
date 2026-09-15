@@ -124,7 +124,7 @@ button:disabled {
   content: "";
 }
 
-.brand-block, .header-actions {
+.brand-block, .header-actions, .analysis-actions {
   display: flex;
   align-items: center;
   gap: 13px;
@@ -181,6 +181,10 @@ button:disabled {
 
 .header-actions {
   gap: 24px;
+}
+
+.analysis-actions {
+  gap: 9px;
 }
 
 .local-badge {
@@ -248,6 +252,38 @@ button:disabled {
 .file-button.is-busy span {
   cursor: wait;
   opacity: 0.65;
+}
+
+.screenshot-button {
+  display: inline-grid;
+  width: 39px;
+  height: 39px;
+  flex: 0 0 39px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #b9dfe3;
+  border-radius: 8px;
+  background: var(--page-surface);
+  color: var(--page-cyan);
+  cursor: pointer;
+}
+
+.screenshot-button::before {
+  width: 17px;
+  height: 17px;
+  background: currentColor;
+  content: "";
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.5 5.5 10 3.75h4l1.5 1.75H19A2.5 2.5 0 0 1 21.5 8v9A2.5 2.5 0 0 1 19 19.5H5A2.5 2.5 0 0 1 2.5 17V8A2.5 2.5 0 0 1 5 5.5h3.5Z'/%3E%3Ccircle cx='12' cy='12.5' r='3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.screenshot-button:not(:disabled):hover {
+  border-color: var(--page-cyan);
+  background: rgba(37, 120, 134, 0.06);
+  box-shadow: 0 0 18px rgba(37, 120, 134, 0.11);
+}
+
+.screenshot-button.is-busy::before {
+  animation: status-pulse 600ms ease-in-out infinite alternate;
 }
 
 .analysis-shell {

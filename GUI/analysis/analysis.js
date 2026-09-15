@@ -4,12 +4,13 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260913-board-size";
+} from "/shared/board_renderer.js?v=20260915-screenshot";
 
 
 const elements = {
   fileInput: document.querySelector("#npz-file"),
   fileButton: document.querySelector("#file-button"),
+  screenshotButton: document.querySelector("#screenshot-button"),
   emptyFileButton: document.querySelector("#open-empty-file"),
   dropTarget: document.querySelector("#drop-target"),
   dropOverlay: document.querySelector("#drop-overlay"),
@@ -86,6 +87,7 @@ const view = {
   diagnosticsCursor: 0,
   diagnosticsPollTimer: null,
   lastDiagnosticFrameKey: null,
+  screenshotting: false,
 };
 
 
@@ -174,6 +176,82 @@ function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+}
+
+
+function safeFileStem(fileName) {
+  return fileName
+    .replace(/\.npz$/i, "")
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/^-+|-+$/g, "") || "dots-analysis";
+}
+
+
+function screenshotFileName() {
+  const game = safeFileStem(view.analysis?.file_name || "dots-analysis");
+  const move = view.frame?.move_number || view.frameIndex + 1;
+  const selected = view.selectedCell || view.frame?.selected_action;
+  const cell = selected ? `-r${selected[0]}-c${selected[1]}` : "";
+  return `${game}-move-${move}-${view.overlay}${cell}.png`;
+}
+
+
+function canvasToPngBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("The browser could not create the PNG screenshot."));
+    }, "image/png");
+  });
+}
+
+
+function updateScreenshotAvailability() {
+  elements.screenshotButton.disabled =
+    !view.frame || view.importing || view.screenshotting;
+}
+
+
+async function downloadSquareScreenshot() {
+  if (!view.frame || view.screenshotting) return;
+
+  view.screenshotting = true;
+  elements.screenshotButton.classList.add("is-busy");
+  elements.screenshotButton.title = "Creating square screenshot…";
+  updateScreenshotAvailability();
+
+  try {
+    const screenshot = boardRenderer.renderSquareCanvas(1600);
+    const blob = await canvasToPngBlob(screenshot);
+    const fileName = screenshotFileName();
+    const objectUrl = URL.createObjectURL(blob);
+    const download = document.createElement("a");
+    download.href = objectUrl;
+    download.download = fileName;
+    document.body.append(download);
+    download.click();
+    download.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+    showStatus(`Saved ${fileName} as a 1:1 PNG.`);
+    logDiagnostic(
+      `square screenshot · frame ${view.frameIndex + 1} · ${view.overlay} overlay · 1600 × 1600 PNG`,
+      { level: "success", source: "EXPORT" },
+    );
+  } catch (error) {
+    showStatus(error.message || "Could not save the screenshot.", "error");
+    logDiagnostic(
+      error.message || "Could not save the screenshot.",
+      { level: "error", source: "EXPORT" },
+    );
+  } finally {
+    view.screenshotting = false;
+    elements.screenshotButton.classList.remove("is-busy");
+    elements.screenshotButton.title = "Download square screenshot";
+    updateScreenshotAvailability();
+  }
 }
 
 
@@ -408,6 +486,7 @@ async function importGame(file) {
 
   view.importing = true;
   stopPlayback();
+  updateScreenshotAvailability();
   elements.fileButton.classList.add("is-busy");
   elements.fileInput.disabled = true;
   elements.emptyFileButton.disabled = true;
@@ -478,6 +557,7 @@ async function importGame(file) {
     elements.fileButton.querySelector("span").textContent = view.analysis
       ? "Open another game"
       : "Open NPZ game";
+    updateScreenshotAvailability();
   }
 }
 
@@ -696,6 +776,7 @@ function updateFrameDisplay() {
   boardRenderer.setFrame(frame);
   boardRenderer.setOverlay(view.overlay);
   selectBoardCell(view.selectedCell, false);
+  updateScreenshotAvailability();
 }
 
 
@@ -877,6 +958,7 @@ elements.fileInput.addEventListener("change", () => {
 });
 
 elements.emptyFileButton.addEventListener("click", () => elements.fileInput.click());
+elements.screenshotButton.addEventListener("click", downloadSquareScreenshot);
 
 
 elements.overlaySwitcher.addEventListener("click", (event) => {

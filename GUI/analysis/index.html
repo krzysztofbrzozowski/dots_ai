@@ -10,8 +10,8 @@
     />
     <title>Dots — game analysis</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260913-board-size" />
-    <script type="module" src="/assets/analysis.js?v=20260913-board-size"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260915-screenshot" />
+    <script type="module" src="/assets/analysis.js?v=20260915-screenshot"></script>
   </head>
   <body>
     <header class="app-header">
@@ -25,10 +25,20 @@
 
       <div class="header-actions">
         <span class="local-badge"><i aria-hidden="true"></i>Local workspace</span>
-        <label id="file-button" class="file-button" for="npz-file">
-          <input id="npz-file" type="file" accept=".npz,application/octet-stream" />
-          <span>Open NPZ game</span>
-        </label>
+        <div class="analysis-actions">
+          <button
+            id="screenshot-button"
+            class="screenshot-button"
+            type="button"
+            aria-label="Download square screenshot"
+            title="Download square screenshot"
+            disabled
+          ></button>
+          <label id="file-button" class="file-button" for="npz-file">
+            <input id="npz-file" type="file" accept=".npz,application/octet-stream" />
+            <span>Open NPZ game</span>
+          </label>
+        </div>
       </div>
     </header>
 

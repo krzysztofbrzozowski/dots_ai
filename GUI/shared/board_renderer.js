@@ -72,6 +72,45 @@ export class DotsBoardRenderer {
     this.draw();
   }
 
+  renderSquareCanvas(size = 1600) {
+    if (!this.frame || !this.layout) {
+      throw new Error("A board frame must be visible before it can be exported.");
+    }
+
+    const dimension = Math.max(1, Math.round(size));
+    const output = document.createElement("canvas");
+    output.width = dimension;
+    output.height = dimension;
+    const outputContext = output.getContext("2d");
+    if (!outputContext) throw new Error("The screenshot canvas is unavailable.");
+
+    // Draw through a smaller logical square and scale it up for a crisp PNG.
+    // The board uses a comfortable inset similar to the analysis view: the
+    // square is the canvas boundary, without making the grid feel edge-to-edge.
+    const logicalSize = 800;
+    const boardSize = 640;
+    const boardInset = (logicalSize - boardSize) / 2;
+    outputContext.fillStyle = cssColor("--board-surface");
+    outputContext.fillRect(0, 0, dimension, dimension);
+    outputContext.save();
+    outputContext.scale(dimension / logicalSize, dimension / logicalSize);
+    outputContext.translate(boardInset, boardInset);
+
+    const visibleContext = this.context;
+    const visibleLayout = this.layout;
+    try {
+      this.context = outputContext;
+      this.layout = this.layoutForSize(boardSize, boardSize);
+      this.draw();
+    } finally {
+      this.context = visibleContext;
+      this.layout = visibleLayout;
+      outputContext.restore();
+    }
+
+    return output;
+  }
+
   resizeAndDraw() {
     const bounds = this.canvas.getBoundingClientRect();
     const width = Math.max(1, bounds.width);
@@ -88,6 +127,11 @@ export class DotsBoardRenderer {
       return;
     }
 
+    this.layout = this.layoutForSize(width, height);
+    this.draw();
+  }
+
+  layoutForSize(width, height) {
     const labelSpace = 38;
     const rightSpace = 20;
     // The selected-action and selected-cell rings extend beyond the heatmap
@@ -104,8 +148,7 @@ export class DotsBoardRenderer {
     const originX = labelSpace + (availableWidth - gridWidth) / 2;
     const originY = labelSpace + (availableHeight - gridHeight) / 2;
 
-    this.layout = { width, height, step, originX, originY };
-    this.draw();
+    return { width, height, step, originX, originY };
   }
 
   draw() {
