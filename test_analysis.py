@@ -301,6 +301,8 @@ def test_analysis_api_runs_a_disposable_experiment_step():
     assert started.status_code == 201
     assert started.json()["source_move_number"] == 1
     assert started.json()["status"] == "ready"
+    assert started.json()["search"]["uct_c_param"] == 1.4
+    assert started.json()["frames"] == []
 
     step = client.post(f"/api/analyses/{analysis_id}/experiment/step")
     assert step.status_code == 202
@@ -318,6 +320,8 @@ def test_analysis_api_runs_a_disposable_experiment_step():
     assert payload["status"] == "ready"
     assert payload["moves_completed"] == 1
     assert payload["next_move_number"] == 2
+    assert len(payload["frames"]) == 1
+    assert payload["frames"][0]["index"] == 0
     assert payload["latest_frame"]["selected_action"] == [0, 0]
     assert payload["current_state"]["player_to_move"] == -1
 
@@ -335,6 +339,8 @@ def test_analysis_api_runs_a_disposable_experiment_step():
     ).json()
     assert completed["status"] == "complete"
     assert completed["moves_completed"] == 4
+    assert [frame["move_number"] for frame in completed["frames"]] == [1, 2, 3, 4]
+    assert [frame["index"] for frame in completed["frames"]] == [0, 1, 2, 3]
     assert completed["current_state"]["game_over"] is True
     assert completed["latest_frame"]["move_number"] == 4
 
@@ -361,6 +367,9 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert 'id="start-experiment"' in page.text
     assert 'id="step-experiment"' in page.text
     assert 'id="continue-experiment"' in page.text
+    assert 'id="timeline-source-switcher"' in page.text
+    assert 'data-timeline-source="original"' in page.text
+    assert 'data-timeline-source="replay"' in page.text
     assert page.headers["cache-control"] == "no-store"
     assert script.status_code == 200
     assert "importGame" in script.text
@@ -370,6 +379,8 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert "startExperimentFromSelectedFrame" in script.text
     assert "runExperimentCommand" in script.text
     assert "pollExperiment" in script.text
+    assert "switchTimelineSource" in script.text
+    assert "replayFrames" in script.text
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
     assert "renderSquareCanvas" in renderer.text

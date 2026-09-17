@@ -9,6 +9,7 @@ from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
+from inspect import signature
 from multiprocessing import get_context
 from threading import RLock, Thread
 
@@ -43,6 +44,7 @@ class ExperimentSearchConfig:
     simulation_seconds: float | None
     simulations_number: int | None
     rollout_batch_size: int
+    uct_c_param: float
 
     @classmethod
     def from_game(cls, game):
@@ -50,6 +52,11 @@ class ExperimentSearchConfig:
             simulation_seconds=game.requested_simulation_seconds,
             simulations_number=game.requested_simulations,
             rollout_batch_size=int(game.rollout_batch_size),
+            uct_c_param=float(
+                signature(TwoPlayerMCTSNode.best_child)
+                .parameters["c_param"]
+                .default
+            ),
         )
 
     @property
@@ -62,6 +69,7 @@ class ExperimentSearchConfig:
             "simulation_seconds": self.simulation_seconds,
             "simulations_number": self.simulations_number,
             "rollout_batch_size": self.rollout_batch_size,
+            "uct_c_param": self.uct_c_param,
         }
 
 
@@ -205,6 +213,7 @@ class _Experiment:
         self.state = analysis_frame_to_game_state(game, frame_index)
         self.next_move_number = self.source_move_number
         self.moves_completed = 0
+        self.frames = []
         self.latest_frame = None
         self.status = "complete" if self.state.game_result is not None else "ready"
         self.mode = None
@@ -240,6 +249,7 @@ class _Experiment:
                         else None
                     ),
                 },
+                "frames": deepcopy(self.frames),
                 "latest_frame": deepcopy(self.latest_frame),
             }
 
@@ -262,7 +272,7 @@ class ExperimentManager:
             experiment = _Experiment(analysis_id, game, frame_index)
             self._experiments[analysis_id] = experiment
         PRINT_T(
-            f"Experiment branch ready before move {frame_index + 1}",
+            f"Forced replay ready before move {frame_index + 1}",
             level="success",
             source="MCTS",
         )
@@ -323,7 +333,9 @@ class ExperimentManager:
                     )
                     selected = frame["selected_action"]
                     with experiment.lock:
+                        frame["index"] = len(experiment.frames)
                         experiment.state = next_state
+                        experiment.frames.append(frame)
                         experiment.latest_frame = frame
                         experiment.moves_completed += 1
                         experiment.next_move_number += 1
@@ -331,7 +343,7 @@ class ExperimentManager:
                         cancel_requested = experiment.cancel_requested
 
                     PRINT_T(
-                        f"Experiment move {move_number}: selected "
+                        f"Forced replay move {move_number}: selected "
                         f"({selected[0]}, {selected[1]}) after "
                         f"{frame['completed_rollouts']} rollouts",
                         level="success",
@@ -358,7 +370,7 @@ class ExperimentManager:
                 experiment.error = str(error) or error.__class__.__name__
                 experiment.revision += 1
             PRINT_T(
-                f"Experiment failed: {experiment.error}",
+                f"Forced replay failed: {experiment.error}",
                 level="error",
                 source="MCTS",
             )

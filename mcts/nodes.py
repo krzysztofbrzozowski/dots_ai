@@ -98,7 +98,7 @@ class MCTSNode(ABC):
     def release_path(self):
         pass
 
-    def best_child(self, c_param=1.4):
+    def best_child(self, c_param=1):
         # c_param controls how strongly MCTS prefers exploration
         # 1.4 is a common default value because it is close to sqrt(2) ≈ 1.414
         #

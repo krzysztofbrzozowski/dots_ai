@@ -10,8 +10,8 @@
     />
     <title>Dots — game analysis</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260917-experiment" />
-    <script type="module" src="/assets/analysis.js?v=20260917-experiment"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260917-forced-replay" />
+    <script type="module" src="/assets/analysis.js?v=20260917-forced-replay"></script>
   </head>
   <body>
     <header class="app-header">
@@ -120,7 +120,7 @@
 
           <section class="experiment-panel" aria-labelledby="experiment-title">
             <div class="experiment-copy">
-              <p class="eyebrow">MCTS experiment</p>
+              <p class="eyebrow">MCTS forced replay</p>
               <h3 id="experiment-title">Branch from the selected saved frame</h3>
               <p id="experiment-status">
                 Open a game and choose the position you want to replay.
@@ -130,7 +130,7 @@
               <button id="start-experiment" type="button" disabled>Start from this frame</button>
               <button id="step-experiment" type="button" disabled>Run one step</button>
               <button id="continue-experiment" type="button" disabled>Continue game</button>
-              <button id="show-experiment" class="quiet-button" type="button" disabled>Show branch</button>
+              <button id="show-experiment" class="quiet-button" type="button" disabled>Open replay</button>
             </div>
           </section>
 
@@ -185,6 +185,33 @@
             <span id="frame-counter" class="frame-counter">0 / 0</span>
           </div>
 
+          <div
+            id="timeline-source-switcher"
+            class="timeline-source-switcher"
+            role="group"
+            aria-label="Timeline source"
+          >
+            <button
+              class="is-active"
+              type="button"
+              data-timeline-source="original"
+              aria-pressed="true"
+              disabled
+            >
+              <span>Original game</span>
+              <small id="original-timeline-range">Not loaded</small>
+            </button>
+            <button
+              type="button"
+              data-timeline-source="replay"
+              aria-pressed="false"
+              disabled
+            >
+              <span>Forced replay</span>
+              <small id="replay-timeline-range">Not started</small>
+            </button>
+          </div>
+
           <div class="playback-controls" aria-label="Timeline playback">
             <button id="previous-frame" type="button" aria-label="Previous frame" disabled>↑</button>
             <button id="play-timeline" class="play-button" type="button" disabled>Play</button>
@@ -196,8 +223,8 @@
             <ol id="timeline-list" class="timeline-list"></ol>
             <div id="timeline-empty" class="timeline-empty">
               <div class="timeline-placeholder" aria-hidden="true"><i></i><i></i><i></i></div>
-              <strong>Your decision trail</strong>
-              <span>Move by move, the story<br />of the search appears here.</span>
+              <strong id="timeline-empty-title">Your decision trail</strong>
+              <span id="timeline-empty-message">Move by move, the story<br />of the search appears here.</span>
             </div>
           </div>
 

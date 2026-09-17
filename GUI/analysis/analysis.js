@@ -58,6 +58,11 @@ const elements = {
   stepExperiment: document.querySelector("#step-experiment"),
   continueExperiment: document.querySelector("#continue-experiment"),
   showExperiment: document.querySelector("#show-experiment"),
+  timelinePanel: document.querySelector(".timeline-panel"),
+  timelineTitle: document.querySelector("#timeline-title"),
+  timelineSourceSwitcher: document.querySelector("#timeline-source-switcher"),
+  originalTimelineRange: document.querySelector("#original-timeline-range"),
+  replayTimelineRange: document.querySelector("#replay-timeline-range"),
   frameCounter: document.querySelector("#frame-counter"),
   previousFrame: document.querySelector("#previous-frame"),
   playTimeline: document.querySelector("#play-timeline"),
@@ -65,6 +70,8 @@ const elements = {
   timelineWheel: document.querySelector("#timeline-wheel"),
   timelineList: document.querySelector("#timeline-list"),
   timelineEmpty: document.querySelector("#timeline-empty"),
+  timelineEmptyTitle: document.querySelector("#timeline-empty-title"),
+  timelineEmptyMessage: document.querySelector("#timeline-empty-message"),
   status: document.querySelector("#status"),
   diagnosticsOutput: document.querySelector("#diagnostics-output"),
   diagnosticsConnection: document.querySelector("#diagnostics-connection"),
@@ -77,6 +84,9 @@ const view = {
   analysis: null,
   frame: null,
   frameIndex: 0,
+  originalFrameIndex: 0,
+  replayFrameIndex: 0,
+  timelineSource: "original",
   selectedCell: null,
   overlay: "value",
   importing: false,
@@ -376,7 +386,10 @@ function experimentBudgetLabel(search) {
   const execution = search.rollout_batch_size === 1
     ? "sequential"
     : `${formatInteger(search.rollout_batch_size)} rollout workers`;
-  return `${budget} · ${execution}`;
+  const exploration = Number.isFinite(search.uct_c_param)
+    ? `UCT c ${formatDecimal(search.uct_c_param, 2)}`
+    : "UCT c unknown";
+  return `${budget} · ${execution} · ${exploration}`;
 }
 
 
@@ -386,9 +399,60 @@ function stopExperimentPolling() {
 }
 
 
+function replayFrames() {
+  return view.experiment?.frames || [];
+}
+
+
+function timelineLength() {
+  return view.timelineSource === "replay"
+    ? replayFrames().length
+    : view.analysis?.frame_count || 0;
+}
+
+
+function updateTimelineSourceControls() {
+  const originalButton = elements.timelineSourceSwitcher.querySelector(
+    '[data-timeline-source="original"]',
+  );
+  const replayButton = elements.timelineSourceSwitcher.querySelector(
+    '[data-timeline-source="replay"]',
+  );
+  const frames = replayFrames();
+  const hasOriginal = Boolean(view.analysis);
+  const hasReplay = frames.length > 0;
+
+  originalButton.disabled = !hasOriginal;
+  replayButton.disabled = !hasReplay;
+  elements.originalTimelineRange.textContent = hasOriginal
+    ? `Moves 1–${view.analysis.frame_count}`
+    : "Not loaded";
+  elements.replayTimelineRange.textContent = hasReplay
+    ? `Moves ${frames[0].move_number}–${frames.at(-1).move_number}`
+    : view.experiment
+      ? `Starts at move ${view.experiment.source_move_number}`
+      : "Not started";
+
+  for (const button of elements.timelineSourceSwitcher.querySelectorAll("button")) {
+    const isActive = button.dataset.timelineSource === view.timelineSource;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  }
+  elements.timelinePanel.classList.toggle(
+    "is-replay",
+    view.timelineSource === "replay",
+  );
+  elements.timelineTitle.textContent = view.timelineSource === "replay"
+    ? "Forced replay"
+    : "Moves";
+}
+
+
 function updateExperimentControls() {
   const experiment = view.experiment;
-  const hasSavedFrame = Boolean(view.analysis && view.frame && !view.frame.experiment);
+  const hasSavedFrame = Boolean(
+    view.analysis && view.frame && view.timelineSource === "original",
+  );
   const isRunning = experiment?.status === "running";
   const isFinished = Boolean(experiment?.current_state?.game_over);
   const isUnavailable = view.importing || view.experimentRequestPending;
@@ -401,10 +465,11 @@ function updateExperimentControls() {
   elements.startExperiment.disabled = !hasSavedFrame || isRunning || isUnavailable;
   elements.stepExperiment.disabled = !experiment || isRunning || isFinished || isUnavailable;
   elements.continueExperiment.disabled = !experiment || isRunning || isFinished || isUnavailable;
-  elements.showExperiment.disabled = !experiment?.latest_frame || isUnavailable;
+  elements.showExperiment.disabled = replayFrames().length === 0 || isUnavailable;
   elements.startExperiment.textContent = experiment
-    ? `Reset from move ${view.frameIndex + 1}`
-    : `Start from move ${view.frameIndex + 1}`;
+    ? `Reset from move ${view.originalFrameIndex + 1}`
+    : `Start from move ${view.originalFrameIndex + 1}`;
+  updateTimelineSourceControls();
 
   if (!view.analysis) {
     elements.experimentTitle.textContent = "Branch from the selected saved frame";
@@ -414,7 +479,7 @@ function updateExperimentControls() {
   }
   if (!experiment) {
     elements.experimentTitle.textContent =
-      `Start an alternative branch before move ${view.frameIndex + 1}`;
+      `Start an alternative branch before move ${view.originalFrameIndex + 1}`;
     elements.experimentStatus.textContent =
       "The imported timeline will remain unchanged.";
     return;
@@ -432,7 +497,7 @@ function updateExperimentControls() {
   }
   if (experiment.status === "failed") {
     elements.experimentStatus.textContent =
-      experiment.error || "The experiment search failed.";
+      experiment.error || "The forced replay search failed.";
     return;
   }
   if (isFinished) {
@@ -443,46 +508,37 @@ function updateExperimentControls() {
     return;
   }
   elements.experimentStatus.textContent =
-    `${formatInteger(experiment.moves_completed)} experimental moves · ` +
+    `${formatInteger(experiment.moves_completed)} forced replay moves · ` +
     `next is move ${experiment.next_move_number} · ` +
     experimentBudgetLabel(experiment.search);
 }
 
 
-function displayExperimentFrame(frame) {
-  if (!frame) return;
-  stopPlayback();
-  cancelHeadValuePrediction();
-  view.displayingExperiment = true;
-  view.frame = frame;
-  view.selectedCell = [...frame.selected_action];
-  updateActiveTimelineItem();
-  updateFrameDisplay();
-}
-
-
 async function startExperimentFromSelectedFrame() {
-  if (!view.analysis || !view.frame || view.frame.experiment) return;
+  if (!view.analysis || !view.frame || view.timelineSource !== "original") return;
   stopPlayback();
   stopExperimentPolling();
   view.experimentRequestPending = true;
   updateExperimentControls();
   showStatus(
-    `Preparing an experiment before move ${view.frameIndex + 1}…`,
+    `Preparing a forced replay before move ${view.originalFrameIndex + 1}…`,
     "busy",
   );
 
   try {
-    const query = new URLSearchParams({ frame_index: String(view.frameIndex) });
+    const query = new URLSearchParams({
+      frame_index: String(view.originalFrameIndex),
+    });
     const response = await fetch(
       `/api/analyses/${view.analysis.analysis_id}/experiment?${query}`,
       { method: "POST", cache: "no-store" },
     );
     const payload = await responsePayload(response);
     if (!response.ok) {
-      throw new Error(payload?.detail || "Could not start the MCTS experiment.");
+      throw new Error(payload?.detail || "Could not start the forced replay.");
     }
     view.experiment = payload;
+    view.replayFrameIndex = 0;
     view.displayedExperimentMoves = 0;
     logDiagnostic(
       `branch created before move ${payload.source_move_number} · ` +
@@ -490,12 +546,12 @@ async function startExperimentFromSelectedFrame() {
       { level: "success", source: "MCTS" },
     );
     showStatus(
-      `Experiment ready before move ${payload.source_move_number}.`,
+      `Forced replay ready before move ${payload.source_move_number}.`,
     );
   } catch (error) {
-    showStatus(error.message || "Could not start the experiment.", "error");
+    showStatus(error.message || "Could not start the forced replay.", "error");
     logDiagnostic(
-      error.message || "Could not start the experiment.",
+      error.message || "Could not start the forced replay.",
       { level: "error", source: "MCTS" },
     );
   } finally {
@@ -550,27 +606,35 @@ async function pollExperiment() {
   if (!view.analysis || !view.experiment) return;
 
   try {
+    const previousFrameCount = replayFrames().length;
+    const wasFollowingLatest =
+      view.timelineSource === "replay" &&
+      view.replayFrameIndex >= previousFrameCount - 1;
     const response = await fetch(
       `/api/analyses/${view.analysis.analysis_id}/experiment`,
       { cache: "no-store" },
     );
     const payload = await responsePayload(response);
     if (!response.ok) {
-      throw new Error(payload?.detail || "Could not read the experiment status.");
+      throw new Error(payload?.detail || "Could not read the forced replay status.");
     }
-    const hasNewMove =
-      payload.latest_frame &&
-      payload.moves_completed > view.displayedExperimentMoves;
+    const hasNewMove = payload.frames.length > previousFrameCount;
     view.experiment = payload;
     if (hasNewMove) {
       view.displayedExperimentMoves = payload.moves_completed;
-      displayExperimentFrame(payload.latest_frame);
-      const selected = payload.latest_frame.selected_action;
-      showStatus(
-        `Experiment move ${payload.latest_frame.move_number}: selected ` +
-          `${formatCoordinate(selected)} after ` +
-          `${formatInteger(payload.latest_frame.completed_rollouts)} rollouts.`,
-      );
+      if (previousFrameCount === 0) {
+        switchTimelineSource("replay", { selectLatest: true });
+      } else if (view.timelineSource === "replay") {
+        view.replayFrameIndex = wasFollowingLatest
+          ? payload.frames.length - 1
+          : Math.min(view.replayFrameIndex, payload.frames.length - 1);
+        view.frameIndex = view.replayFrameIndex;
+        buildTimeline();
+        selectFrame(view.frameIndex, {
+          centerTimeline: true,
+          smooth: wasFollowingLatest,
+        });
+      }
     }
     updateExperimentControls();
 
@@ -579,20 +643,20 @@ async function pollExperiment() {
       return;
     }
     if (payload.status === "failed") {
-      showStatus(payload.error || "The experiment failed.", "error");
+      showStatus(payload.error || "The forced replay failed.", "error");
       return;
     }
     if (payload.current_state.game_over) {
       showStatus(
-        `Experiment complete: ${resultName(payload.current_state.winner)}, ` +
+        `Forced replay complete: ${resultName(payload.current_state.winner)}, ` +
           `score ${payload.current_state.scores.player_1}—` +
           `${payload.current_state.scores.player_2}.`,
       );
     }
   } catch (error) {
-    showStatus(error.message || "Could not read the experiment status.", "error");
+    showStatus(error.message || "Could not read the forced replay status.", "error");
     logDiagnostic(
-      error.message || "Could not read the experiment status.",
+      error.message || "Could not read the forced replay status.",
       { level: "error", source: "MCTS" },
     );
     if (view.experiment?.status === "running") {
@@ -764,6 +828,9 @@ async function importGame(file) {
     view.analysis = payload;
     view.frame = null;
     view.frameIndex = 0;
+    view.originalFrameIndex = 0;
+    view.replayFrameIndex = 0;
+    view.timelineSource = "original";
     view.selectedCell = null;
     view.requestNumber += 1;
     view.frameCache.clear();
@@ -840,11 +907,49 @@ function updateGameOverview() {
 }
 
 
+function switchTimelineSource(source, { selectLatest = false } = {}) {
+  if (!view.analysis || !["original", "replay"].includes(source)) return;
+  if (source === "replay" && replayFrames().length === 0) return;
+
+  stopPlayback();
+  view.timelineSource = source;
+  view.displayingExperiment = source === "replay";
+  if (source === "replay") {
+    view.replayFrameIndex = selectLatest
+      ? replayFrames().length - 1
+      : Math.min(view.replayFrameIndex, replayFrames().length - 1);
+    view.frameIndex = view.replayFrameIndex;
+  } else {
+    view.frameIndex = view.originalFrameIndex;
+  }
+
+  buildTimeline();
+  selectFrame(view.frameIndex, { centerTimeline: true, smooth: false });
+}
+
+
 function buildTimeline() {
   elements.timelineList.replaceChildren();
-  elements.timelineEmpty.hidden = true;
+  const isReplay = view.timelineSource === "replay";
+  const descriptors = isReplay
+    ? replayFrames().map((frame, index) => ({
+        index,
+        move_number: frame.move_number,
+        player_to_move: frame.player_to_move,
+        selected_action: frame.selected_action,
+        selected_mean_value: frame.selected_action_statistics?.mean_value ?? null,
+      }))
+    : view.analysis?.timeline || [];
 
-  for (const descriptor of view.analysis.timeline) {
+  elements.timelineEmpty.hidden = descriptors.length > 0;
+  elements.timelineEmptyTitle.textContent = isReplay
+    ? "Replay waiting for its first move"
+    : "Your decision trail";
+  elements.timelineEmptyMessage.textContent = isReplay
+    ? "Run one step or continue the game to populate this timeline."
+    : "Move by move, the story of the search appears here.";
+
+  for (const descriptor of descriptors) {
     const listItem = document.createElement("li");
     const button = document.createElement("button");
     const heading = document.createElement("span");
@@ -888,11 +993,11 @@ function buildTimeline() {
     elements.timelineList.append(listItem);
   }
 
-  elements.previousFrame.disabled = false;
-  elements.playTimeline.disabled = false;
-  elements.nextFrame.disabled = false;
+  elements.playTimeline.disabled = descriptors.length === 0;
   updateTimelinePadding();
   elements.timelineWheel.scrollTop = 0;
+  updatePlaybackControls();
+  updateTimelineSourceControls();
 }
 
 
@@ -926,7 +1031,7 @@ async function fetchFrame(frameIndex) {
 }
 
 
-async function selectFrame(
+async function selectOriginalFrame(
   requestedIndex,
   { centerTimeline = false, smooth = false } = {},
 ) {
@@ -940,6 +1045,7 @@ async function selectFrame(
   if (view.overlay === "head-value") resetHeadValuePanel();
   const requestNumber = ++view.requestNumber;
   view.frameIndex = frameIndex;
+  view.originalFrameIndex = frameIndex;
   view.displayingExperiment = false;
   updateActiveTimelineItem();
   updatePlaybackControls();
@@ -986,6 +1092,62 @@ async function selectFrame(
 }
 
 
+function selectReplayFrame(
+  requestedIndex,
+  { centerTimeline = false, smooth = false } = {},
+) {
+  const frames = replayFrames();
+  if (!frames.length) return;
+
+  const frameIndex = Math.max(0, Math.min(requestedIndex, frames.length - 1));
+  const frame = frames[frameIndex];
+  view.requestNumber += 1;
+  cancelHeadValuePrediction();
+  if (view.overlay === "head-value") {
+    resetHeadValuePanel(
+      "Value-head requests are available on saved frames, not forced replay frames.",
+    );
+  }
+  view.frameIndex = frameIndex;
+  view.replayFrameIndex = frameIndex;
+  view.displayingExperiment = true;
+  view.frame = frame;
+  view.selectedCell = [...frame.selected_action];
+  updateActiveTimelineItem();
+  updatePlaybackControls();
+  if (centerTimeline) centerTimelineItem(frameIndex, smooth);
+  updateFrameDisplay();
+  showStatus(
+    `Forced replay move ${frame.move_number}: ${playerName(frame.player_to_move)} selected ` +
+      `${formatCoordinate(frame.selected_action)} after ` +
+      `${formatInteger(frame.completed_rollouts)} rollouts.`,
+  );
+
+  const diagnosticFrameKey =
+    `${view.analysis.analysis_id}:replay:${frame.move_number}`;
+  if (view.lastDiagnosticFrameKey !== diagnosticFrameKey) {
+    view.lastDiagnosticFrameKey = diagnosticFrameKey;
+    logDiagnostic(
+      `forced replay move ${frame.move_number} · ` +
+        `${playerName(frame.player_to_move)} · action ` +
+        `${formatCoordinate(frame.selected_action)} · ` +
+        `${formatInteger(frame.completed_rollouts)} rollouts · ` +
+        `${formatDuration(frame.elapsed_seconds)}`,
+      { source: "FRAME" },
+    );
+  }
+}
+
+
+function selectFrame(requestedIndex, options = {}) {
+  if (view.timelineSource === "replay") {
+    selectReplayFrame(requestedIndex, options);
+    return;
+  }
+  selectOriginalFrame(requestedIndex, options);
+}
+
+
 function preloadNeighboringFrames(frameIndex) {
   for (const neighbor of [frameIndex - 1, frameIndex + 1]) {
     if (neighbor >= 0 && neighbor < view.analysis.frame_count) {
@@ -1002,14 +1164,14 @@ function updateFrameDisplay() {
 
   elements.boardEmpty.hidden = true;
   elements.boardTitle.textContent = isExperiment
-    ? `Experiment · before move ${frame.move_number}`
+    ? `Forced replay · before move ${frame.move_number}`
     : `Before move ${frame.move_number}`;
   elements.playerPill.textContent = `${playerName(frame.player_to_move)} to move`;
   elements.playerPill.className = frame.player_to_move === PLAYER_1
     ? "player-pill player-one"
     : "player-pill player-two";
   elements.frameCounter.textContent = isExperiment
-    ? `Branch · ${frame.move_number}`
+    ? `${frame.move_number} · ${view.replayFrameIndex + 1}/${replayFrames().length}`
     : `${frame.move_number} / ${view.analysis.frame_count}`;
   elements.frameAction.textContent =
     `${formatCoordinate(frame.selected_action)} · ` +
@@ -1028,7 +1190,7 @@ function updateFrameDisplay() {
   elements.board.setAttribute(
     "aria-label",
     `${frame.rows} by ${frame.cols} Dots board ` +
-    `${isExperiment ? "in the experiment " : ""}before move ${frame.move_number}. ` +
+    `${isExperiment ? "in the forced replay " : ""}before move ${frame.move_number}. ` +
     `${playerName(frame.player_to_move)} to move. Selected action ` +
     `${formatCoordinate(frame.selected_action)}.`,
   );
@@ -1103,9 +1265,7 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
 function updateActiveTimelineItem() {
   const timelineItems = elements.timelineList.querySelectorAll(".timeline-item");
   for (const item of timelineItems) {
-    const isActive =
-      !view.displayingExperiment &&
-      Number(item.dataset.frameIndex) === view.frameIndex;
+    const isActive = Number(item.dataset.frameIndex) === view.frameIndex;
     item.classList.toggle("is-active", isActive);
     item.setAttribute("aria-current", isActive ? "step" : "false");
   }
@@ -1179,22 +1339,24 @@ function moveFrame(direction) {
 
 
 function updatePlaybackControls() {
-  if (!view.analysis) return;
-  elements.previousFrame.disabled = view.frameIndex === 0;
-  elements.nextFrame.disabled = view.frameIndex === view.analysis.frame_count - 1;
+  const length = timelineLength();
+  elements.previousFrame.disabled = length === 0 || view.frameIndex === 0;
+  elements.nextFrame.disabled = length === 0 || view.frameIndex === length - 1;
+  elements.playTimeline.disabled = length === 0;
 }
 
 
 function startPlayback() {
-  if (!view.analysis || view.playTimer) return;
-  if (view.frameIndex === view.analysis.frame_count - 1) {
+  const length = timelineLength();
+  if (!view.analysis || view.playTimer || length === 0) return;
+  if (view.frameIndex === length - 1) {
     selectFrame(0, { centerTimeline: true, smooth: false });
   }
 
   elements.playTimeline.textContent = "Pause";
   elements.playTimeline.classList.add("is-playing");
   view.playTimer = window.setInterval(() => {
-    if (view.frameIndex >= view.analysis.frame_count - 1) {
+    if (view.frameIndex >= timelineLength() - 1) {
       stopPlayback();
       return;
     }
@@ -1238,12 +1400,15 @@ elements.continueExperiment.addEventListener("click", () => {
   runExperimentCommand("continue");
 });
 elements.showExperiment.addEventListener("click", () => {
-  if (view.experiment?.latest_frame) {
-    displayExperimentFrame(view.experiment.latest_frame);
-    showStatus(
-      `Showing experiment result for move ${view.experiment.latest_frame.move_number}.`,
-    );
+  if (replayFrames().length) {
+    switchTimelineSource("replay", { selectLatest: true });
   }
+});
+
+elements.timelineSourceSwitcher.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-timeline-source]");
+  if (!button || button.disabled) return;
+  switchTimelineSource(button.dataset.timelineSource);
 });
 
 
@@ -1308,7 +1473,7 @@ elements.timelineWheel.addEventListener("keydown", (event) => {
   if (event.key === "End" && view.analysis) {
     event.preventDefault();
     stopPlayback();
-    selectFrame(view.analysis.frame_count - 1, {
+    selectFrame(timelineLength() - 1, {
       centerTimeline: true,
       smooth: true,
     });

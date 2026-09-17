@@ -1038,6 +1038,70 @@ button:disabled {
   white-space: nowrap;
 }
 
+.timeline-source-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin: 16px 18px 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+
+.timeline-source-switcher button {
+  display: grid;
+  min-width: 0;
+  min-height: 50px;
+  align-content: center;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.timeline-source-switcher button:not(:disabled):hover {
+  border-color: #79dce829;
+  background: #ffffff05;
+  color: var(--text-primary);
+}
+
+.timeline-source-switcher button.is-active {
+  border-color: #79dce842;
+  background: linear-gradient(115deg, #79dce817, #79dce808);
+  color: var(--accent);
+  box-shadow: 0 1px 7px #00000024;
+}
+
+.timeline-source-switcher span,
+.timeline-source-switcher small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-source-switcher span {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.timeline-source-switcher small {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.timeline-source-switcher button.is-active small {
+  color: #b6dce1;
+}
+
 .playback-controls {
   display: grid;
   grid-template-columns: 36px 1fr 36px;
@@ -1357,6 +1421,16 @@ kbd {
   border-radius: 8px;
   background: #17121d;
   color: var(--text-primary);
+}
+
+.timeline-panel.is-replay .timeline-focus {
+  border-color: #ec8bb821;
+  background: #ec8bb805;
+}
+
+.timeline-panel.is-replay .timeline-item.is-active {
+  border-color: #ec8bb857;
+  background: linear-gradient(110deg, #ec8bb816, #79dce807);
 }
 
 .diagnostics-toolbar {
