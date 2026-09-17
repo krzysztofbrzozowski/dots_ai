@@ -1,4 +1,4 @@
-"""Run the saved MCTS game analyzer independently from ``main_mcts.py``."""
+"""Run saved-game analysis and disposable MCTS continuation experiments."""
 
 import uvicorn
 
@@ -20,4 +20,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

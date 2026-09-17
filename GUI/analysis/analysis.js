@@ -51,6 +51,13 @@ const elements = {
   headValueDraw: document.querySelector("#head-value-draw"),
   headValueWin: document.querySelector("#head-value-win"),
   headValueScore: document.querySelector("#head-value-score"),
+  experimentPanel: document.querySelector(".experiment-panel"),
+  experimentTitle: document.querySelector("#experiment-title"),
+  experimentStatus: document.querySelector("#experiment-status"),
+  startExperiment: document.querySelector("#start-experiment"),
+  stepExperiment: document.querySelector("#step-experiment"),
+  continueExperiment: document.querySelector("#continue-experiment"),
+  showExperiment: document.querySelector("#show-experiment"),
   frameCounter: document.querySelector("#frame-counter"),
   previousFrame: document.querySelector("#previous-frame"),
   playTimeline: document.querySelector("#play-timeline"),
@@ -79,6 +86,11 @@ const view = {
   headValueCache: new Map(),
   headValueRequestNumber: 0,
   headValueController: null,
+  experiment: null,
+  experimentRequestPending: false,
+  experimentPollTimer: null,
+  displayingExperiment: false,
+  displayedExperimentMoves: 0,
   scrollTimer: null,
   centeringTimer: null,
   isCenteringTimeline: false,
@@ -356,6 +368,240 @@ async function responsePayload(response) {
 }
 
 
+function experimentBudgetLabel(search) {
+  if (!search) return "saved search settings";
+  const budget = search.budget_type === "seconds"
+    ? `${formatDuration(search.simulation_seconds)} per move`
+    : `${formatInteger(search.simulations_number)} simulations per move`;
+  const execution = search.rollout_batch_size === 1
+    ? "sequential"
+    : `${formatInteger(search.rollout_batch_size)} rollout workers`;
+  return `${budget} · ${execution}`;
+}
+
+
+function stopExperimentPolling() {
+  if (view.experimentPollTimer) window.clearTimeout(view.experimentPollTimer);
+  view.experimentPollTimer = null;
+}
+
+
+function updateExperimentControls() {
+  const experiment = view.experiment;
+  const hasSavedFrame = Boolean(view.analysis && view.frame && !view.frame.experiment);
+  const isRunning = experiment?.status === "running";
+  const isFinished = Boolean(experiment?.current_state?.game_over);
+  const isUnavailable = view.importing || view.experimentRequestPending;
+
+  elements.experimentPanel.classList.toggle("is-running", isRunning);
+  elements.experimentPanel.classList.toggle(
+    "is-failed",
+    experiment?.status === "failed",
+  );
+  elements.startExperiment.disabled = !hasSavedFrame || isRunning || isUnavailable;
+  elements.stepExperiment.disabled = !experiment || isRunning || isFinished || isUnavailable;
+  elements.continueExperiment.disabled = !experiment || isRunning || isFinished || isUnavailable;
+  elements.showExperiment.disabled = !experiment?.latest_frame || isUnavailable;
+  elements.startExperiment.textContent = experiment
+    ? `Reset from move ${view.frameIndex + 1}`
+    : `Start from move ${view.frameIndex + 1}`;
+
+  if (!view.analysis) {
+    elements.experimentTitle.textContent = "Branch from the selected saved frame";
+    elements.experimentStatus.textContent =
+      "Open a game and choose the position you want to replay.";
+    return;
+  }
+  if (!experiment) {
+    elements.experimentTitle.textContent =
+      `Start an alternative branch before move ${view.frameIndex + 1}`;
+    elements.experimentStatus.textContent =
+      "The imported timeline will remain unchanged.";
+    return;
+  }
+
+  elements.experimentTitle.textContent =
+    `Branch from before move ${experiment.source_move_number}`;
+  if (experiment.status === "running") {
+    const action = experiment.mode === "continue"
+      ? "Playing the continuation"
+      : `Searching move ${experiment.next_move_number}`;
+    elements.experimentStatus.textContent =
+      `${action} · ${experimentBudgetLabel(experiment.search)}`;
+    return;
+  }
+  if (experiment.status === "failed") {
+    elements.experimentStatus.textContent =
+      experiment.error || "The experiment search failed.";
+    return;
+  }
+  if (isFinished) {
+    elements.experimentStatus.textContent =
+      `Game over · ${resultName(experiment.current_state.winner)} · ` +
+      `score ${experiment.current_state.scores.player_1}—` +
+      `${experiment.current_state.scores.player_2}`;
+    return;
+  }
+  elements.experimentStatus.textContent =
+    `${formatInteger(experiment.moves_completed)} experimental moves · ` +
+    `next is move ${experiment.next_move_number} · ` +
+    experimentBudgetLabel(experiment.search);
+}
+
+
+function displayExperimentFrame(frame) {
+  if (!frame) return;
+  stopPlayback();
+  cancelHeadValuePrediction();
+  view.displayingExperiment = true;
+  view.frame = frame;
+  view.selectedCell = [...frame.selected_action];
+  updateActiveTimelineItem();
+  updateFrameDisplay();
+}
+
+
+async function startExperimentFromSelectedFrame() {
+  if (!view.analysis || !view.frame || view.frame.experiment) return;
+  stopPlayback();
+  stopExperimentPolling();
+  view.experimentRequestPending = true;
+  updateExperimentControls();
+  showStatus(
+    `Preparing an experiment before move ${view.frameIndex + 1}…`,
+    "busy",
+  );
+
+  try {
+    const query = new URLSearchParams({ frame_index: String(view.frameIndex) });
+    const response = await fetch(
+      `/api/analyses/${view.analysis.analysis_id}/experiment?${query}`,
+      { method: "POST", cache: "no-store" },
+    );
+    const payload = await responsePayload(response);
+    if (!response.ok) {
+      throw new Error(payload?.detail || "Could not start the MCTS experiment.");
+    }
+    view.experiment = payload;
+    view.displayedExperimentMoves = 0;
+    logDiagnostic(
+      `branch created before move ${payload.source_move_number} · ` +
+        experimentBudgetLabel(payload.search),
+      { level: "success", source: "MCTS" },
+    );
+    showStatus(
+      `Experiment ready before move ${payload.source_move_number}.`,
+    );
+  } catch (error) {
+    showStatus(error.message || "Could not start the experiment.", "error");
+    logDiagnostic(
+      error.message || "Could not start the experiment.",
+      { level: "error", source: "MCTS" },
+    );
+  } finally {
+    view.experimentRequestPending = false;
+    updateExperimentControls();
+  }
+}
+
+
+async function runExperimentCommand(command) {
+  if (!view.analysis || !view.experiment || view.experimentRequestPending) return;
+  view.experimentRequestPending = true;
+  updateExperimentControls();
+
+  try {
+    const response = await fetch(
+      `/api/analyses/${view.analysis.analysis_id}/experiment/${command}`,
+      { method: "POST", cache: "no-store" },
+    );
+    const payload = await responsePayload(response);
+    if (!response.ok) {
+      throw new Error(payload?.detail || "Could not start the MCTS search.");
+    }
+    view.experiment = payload;
+    showStatus(
+      command === "step"
+        ? `Searching experimental move ${payload.next_move_number}…`
+        : `Continuing the experiment from move ${payload.next_move_number}…`,
+      "busy",
+    );
+    logDiagnostic(
+      `${command === "step" ? "one step" : "continue game"} requested · ` +
+        `next move ${payload.next_move_number}`,
+      { source: "MCTS" },
+    );
+    pollExperiment();
+  } catch (error) {
+    showStatus(error.message || "Could not start the MCTS search.", "error");
+    logDiagnostic(
+      error.message || "Could not start the MCTS search.",
+      { level: "error", source: "MCTS" },
+    );
+  } finally {
+    view.experimentRequestPending = false;
+    updateExperimentControls();
+  }
+}
+
+
+async function pollExperiment() {
+  stopExperimentPolling();
+  if (!view.analysis || !view.experiment) return;
+
+  try {
+    const response = await fetch(
+      `/api/analyses/${view.analysis.analysis_id}/experiment`,
+      { cache: "no-store" },
+    );
+    const payload = await responsePayload(response);
+    if (!response.ok) {
+      throw new Error(payload?.detail || "Could not read the experiment status.");
+    }
+    const hasNewMove =
+      payload.latest_frame &&
+      payload.moves_completed > view.displayedExperimentMoves;
+    view.experiment = payload;
+    if (hasNewMove) {
+      view.displayedExperimentMoves = payload.moves_completed;
+      displayExperimentFrame(payload.latest_frame);
+      const selected = payload.latest_frame.selected_action;
+      showStatus(
+        `Experiment move ${payload.latest_frame.move_number}: selected ` +
+          `${formatCoordinate(selected)} after ` +
+          `${formatInteger(payload.latest_frame.completed_rollouts)} rollouts.`,
+      );
+    }
+    updateExperimentControls();
+
+    if (payload.status === "running") {
+      view.experimentPollTimer = window.setTimeout(pollExperiment, 750);
+      return;
+    }
+    if (payload.status === "failed") {
+      showStatus(payload.error || "The experiment failed.", "error");
+      return;
+    }
+    if (payload.current_state.game_over) {
+      showStatus(
+        `Experiment complete: ${resultName(payload.current_state.winner)}, ` +
+          `score ${payload.current_state.scores.player_1}—` +
+          `${payload.current_state.scores.player_2}.`,
+      );
+    }
+  } catch (error) {
+    showStatus(error.message || "Could not read the experiment status.", "error");
+    logDiagnostic(
+      error.message || "Could not read the experiment status.",
+      { level: "error", source: "MCTS" },
+    );
+    if (view.experiment?.status === "running") {
+      view.experimentPollTimer = window.setTimeout(pollExperiment, 1500);
+    }
+  }
+}
+
+
 function cancelHeadValuePrediction() {
   view.headValueRequestNumber += 1;
   view.headValueController?.abort();
@@ -486,6 +732,7 @@ async function importGame(file) {
 
   view.importing = true;
   stopPlayback();
+  stopExperimentPolling();
   updateScreenshotAvailability();
   elements.fileButton.classList.add("is-busy");
   elements.fileInput.disabled = true;
@@ -522,9 +769,13 @@ async function importGame(file) {
     view.frameCache.clear();
     view.pendingFrames.clear();
     view.lastDiagnosticFrameKey = null;
+    view.experiment = null;
+    view.displayingExperiment = false;
+    view.displayedExperimentMoves = 0;
     cancelHeadValuePrediction();
     view.headValueCache.clear();
     resetHeadValuePanel();
+    updateExperimentControls();
 
     updateGameOverview();
     buildTimeline();
@@ -558,6 +809,7 @@ async function importGame(file) {
       ? "Open another game"
       : "Open NPZ game";
     updateScreenshotAvailability();
+    updateExperimentControls();
   }
 }
 
@@ -688,8 +940,10 @@ async function selectFrame(
   if (view.overlay === "head-value") resetHeadValuePanel();
   const requestNumber = ++view.requestNumber;
   view.frameIndex = frameIndex;
+  view.displayingExperiment = false;
   updateActiveTimelineItem();
   updatePlaybackControls();
+  updateExperimentControls();
 
   if (centerTimeline) centerTimelineItem(frameIndex, smooth);
   if (!view.frameCache.has(frameIndex)) {
@@ -720,6 +974,7 @@ async function selectFrame(
         { source: "FRAME" },
       );
     }
+    updateExperimentControls();
   } catch (error) {
     if (requestNumber !== view.requestNumber) return;
     showStatus(error.message || "Could not read the selected frame.", "error");
@@ -743,15 +998,19 @@ function preloadNeighboringFrames(frameIndex) {
 function updateFrameDisplay() {
   const frame = view.frame;
   const selected = frame.selected_action_statistics;
+  const isExperiment = Boolean(frame.experiment);
 
   elements.boardEmpty.hidden = true;
-  elements.boardTitle.textContent = `Before move ${frame.move_number}`;
+  elements.boardTitle.textContent = isExperiment
+    ? `Experiment · before move ${frame.move_number}`
+    : `Before move ${frame.move_number}`;
   elements.playerPill.textContent = `${playerName(frame.player_to_move)} to move`;
   elements.playerPill.className = frame.player_to_move === PLAYER_1
     ? "player-pill player-one"
     : "player-pill player-two";
-  elements.frameCounter.textContent =
-    `${frame.move_number} / ${view.analysis.frame_count}`;
+  elements.frameCounter.textContent = isExperiment
+    ? `Branch · ${frame.move_number}`
+    : `${frame.move_number} / ${view.analysis.frame_count}`;
   elements.frameAction.textContent =
     `${formatCoordinate(frame.selected_action)} · ` +
     `${formatDecimal(selected.mean_value, 2, true)} Q/N`;
@@ -768,7 +1027,8 @@ function updateFrameDisplay() {
 
   elements.board.setAttribute(
     "aria-label",
-    `${frame.rows} by ${frame.cols} Dots board before move ${frame.move_number}. ` +
+    `${frame.rows} by ${frame.cols} Dots board ` +
+    `${isExperiment ? "in the experiment " : ""}before move ${frame.move_number}. ` +
     `${playerName(frame.player_to_move)} to move. Selected action ` +
     `${formatCoordinate(frame.selected_action)}.`,
   );
@@ -777,6 +1037,7 @@ function updateFrameDisplay() {
   boardRenderer.setOverlay(view.overlay);
   selectBoardCell(view.selectedCell, false);
   updateScreenshotAvailability();
+  updateExperimentControls();
 }
 
 
@@ -822,7 +1083,12 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
   boardRenderer.setSelectedCell(cell);
 
   if (view.overlay === "head-value" && runHeadValuePrediction) {
-    if (isLegal) requestHeadValue(cell);
+    if (view.displayingExperiment) {
+      showHeadValueError(
+        cell,
+        "Value-head requests are available on saved frames, not experiment results.",
+      );
+    } else if (isLegal) requestHeadValue(cell);
     else {
       showHeadValueError(cell, "Choose an empty position marked as legal.");
       logDiagnostic(
@@ -837,7 +1103,9 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
 function updateActiveTimelineItem() {
   const timelineItems = elements.timelineList.querySelectorAll(".timeline-item");
   for (const item of timelineItems) {
-    const isActive = Number(item.dataset.frameIndex) === view.frameIndex;
+    const isActive =
+      !view.displayingExperiment &&
+      Number(item.dataset.frameIndex) === view.frameIndex;
     item.classList.toggle("is-active", isActive);
     item.setAttribute("aria-current", isActive ? "step" : "false");
   }
@@ -959,6 +1227,24 @@ elements.fileInput.addEventListener("change", () => {
 
 elements.emptyFileButton.addEventListener("click", () => elements.fileInput.click());
 elements.screenshotButton.addEventListener("click", downloadSquareScreenshot);
+elements.startExperiment.addEventListener(
+  "click",
+  startExperimentFromSelectedFrame,
+);
+elements.stepExperiment.addEventListener("click", () => {
+  runExperimentCommand("step");
+});
+elements.continueExperiment.addEventListener("click", () => {
+  runExperimentCommand("continue");
+});
+elements.showExperiment.addEventListener("click", () => {
+  if (view.experiment?.latest_frame) {
+    displayExperimentFrame(view.experiment.latest_frame);
+    showStatus(
+      `Showing experiment result for move ${view.experiment.latest_frame.move_number}.`,
+    );
+  }
+});
 
 
 elements.overlaySwitcher.addEventListener("click", (event) => {
@@ -1091,4 +1377,5 @@ logDiagnostic("analysis workspace ready · waiting for a saved game", {
 logDiagnostic("Python hook ready · from analysis import PRINT_T", {
   source: "SYSTEM",
 });
+updateExperimentControls();
 pollDiagnostics();

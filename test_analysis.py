@@ -1,11 +1,14 @@
 """Tests for the standalone NPZ timeline analysis application."""
 
 from io import BytesIO
+from threading import Event
+from time import monotonic, sleep
 
 import numpy as np
 from fastapi.testclient import TestClient
 
 from analysis import AnalysisFileError, PRINT_T, load_analysis_bytes
+from analysis.mcts_forced_replay import ExperimentManager
 from analysis.server import create_app
 from analysis.service import AnalysisStore, analysis_frame, analysis_summary
 
@@ -255,6 +258,92 @@ def test_analysis_api_imports_reads_and_releases_a_game():
     assert client.get(f"/api/analyses/{analysis_id}").status_code == 404
 
 
+def test_analysis_api_runs_a_disposable_experiment_step():
+    search_finished = Event()
+
+    def fake_search(state, _config, _executor, move_number):
+        action = state.get_legal_actions()[0]
+        next_state = state.move(action)
+        search_finished.set()
+        return next_state, {
+            "experiment": True,
+            "move_number": move_number,
+            "selected_action": list(action),
+            "completed_rollouts": 4,
+        }
+
+    manager = ExperimentManager(search_runner=fake_search)
+    client = TestClient(
+        create_app(
+            AnalysisStore(),
+            experiment_manager=manager,
+        )
+    )
+    game_bytes = make_schema_v1_npz(
+        search_budget_type=np.asarray("simulations"),
+        requested_simulation_seconds=np.asarray(np.nan, dtype=np.float64),
+        requested_simulations=np.asarray(4, dtype=np.int64),
+        rollout_batch_size=np.asarray(1, dtype=np.int32),
+    )
+    imported = client.post(
+        "/api/analyses",
+        content=game_bytes,
+        headers={"X-File-Name": "experiment.npz"},
+    ).json()
+    analysis_id = imported["analysis_id"]
+
+    missing = client.post(f"/api/analyses/{analysis_id}/experiment/step")
+    assert missing.status_code == 404
+
+    started = client.post(
+        f"/api/analyses/{analysis_id}/experiment?frame_index=0"
+    )
+    assert started.status_code == 201
+    assert started.json()["source_move_number"] == 1
+    assert started.json()["status"] == "ready"
+
+    step = client.post(f"/api/analyses/{analysis_id}/experiment/step")
+    assert step.status_code == 202
+    assert step.json()["status"] == "running"
+    assert search_finished.wait(1)
+
+    deadline = monotonic() + 1
+    while manager.snapshot(analysis_id)["status"] == "running":
+        assert monotonic() < deadline
+        sleep(0.001)
+
+    result = client.get(f"/api/analyses/{analysis_id}/experiment")
+    assert result.status_code == 200
+    payload = result.json()
+    assert payload["status"] == "ready"
+    assert payload["moves_completed"] == 1
+    assert payload["next_move_number"] == 2
+    assert payload["latest_frame"]["selected_action"] == [0, 0]
+    assert payload["current_state"]["player_to_move"] == -1
+
+    continued = client.post(
+        f"/api/analyses/{analysis_id}/experiment/continue"
+    )
+    assert continued.status_code == 202
+    deadline = monotonic() + 1
+    while manager.snapshot(analysis_id)["status"] == "running":
+        assert monotonic() < deadline
+        sleep(0.001)
+
+    completed = client.get(
+        f"/api/analyses/{analysis_id}/experiment"
+    ).json()
+    assert completed["status"] == "complete"
+    assert completed["moves_completed"] == 4
+    assert completed["current_state"]["game_over"] is True
+    assert completed["latest_frame"]["move_number"] == 4
+
+    saved_frame = client.get(
+        f"/api/analyses/{analysis_id}/frames/0"
+    ).json()
+    assert saved_frame["board"] == [[0, 0], [0, 0]]
+
+
 def test_analysis_server_serves_the_gui_and_shared_renderer():
     client = TestClient(create_app(AnalysisStore()))
 
@@ -269,12 +358,18 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert 'id="screenshot-button"' in page.text
     assert 'data-overlay="head-value"' in page.text
     assert 'data-overlay="none"' in page.text
+    assert 'id="start-experiment"' in page.text
+    assert 'id="step-experiment"' in page.text
+    assert 'id="continue-experiment"' in page.text
     assert page.headers["cache-control"] == "no-store"
     assert script.status_code == 200
     assert "importGame" in script.text
     assert "requestHeadValue" in script.text
     assert "logDiagnostic" in script.text
     assert "downloadSquareScreenshot" in script.text
+    assert "startExperimentFromSelectedFrame" in script.text
+    assert "runExperimentCommand" in script.text
+    assert "pollExperiment" in script.text
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
     assert "renderSquareCanvas" in renderer.text

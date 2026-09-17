@@ -1,4 +1,4 @@
-"""Standalone HTTP application for the saved-game analyzer."""
+"""HTTP application for saved-game analysis and disposable MCTS branches."""
 
 from pathlib import Path
 from time import perf_counter
@@ -10,6 +10,12 @@ from fastapi.staticfiles import StaticFiles
 
 from analysis.errors import AnalysisFileError
 from analysis.diagnostics import DIAGNOSTICS, PRINT_T
+from analysis.mcts_forced_replay import (
+    ExperimentBusyError,
+    ExperimentFinishedError,
+    ExperimentManager,
+    ExperimentNotFoundError,
+)
 from analysis.loader import MAX_UPLOAD_BYTES, load_analysis_bytes
 from analysis.service import (
     AnalysisNotFoundError,
@@ -51,13 +57,14 @@ async def _read_request_body_with_limit(request):
     return bytes(file_bytes)
 
 
-def create_app(store=None, predictor=None):
+def create_app(store=None, predictor=None, experiment_manager=None):
     """Build an application with an injectable store for isolated tests."""
     analysis_store = store or AnalysisStore()
     value_head_predictor = predictor or ValueHeadPredictor()
+    experiments = experiment_manager or ExperimentManager()
     application = FastAPI(
         title="Dots MCTS Analysis API",
-        description="Read-only analysis of saved MCTS self-play games.",
+        description="Analyze saved MCTS games and run disposable continuations.",
         version="1.0.0",
     )
 
@@ -196,6 +203,84 @@ def create_app(store=None, predictor=None):
             PRINT_T(str(error), level="error", source="MODEL")
             raise HTTPException(status_code=422, detail=str(error)) from error
 
+    @application.post(
+        "/api/analyses/{analysis_id}/experiment",
+        status_code=201,
+    )
+    def start_experiment(
+        analysis_id: str,
+        frame_index: int = Query(ge=0),
+    ):
+        """Create or reset a disposable MCTS branch from one saved frame."""
+        try:
+            game = analysis_store.get(analysis_id)
+            if not 0 <= frame_index < game.frame_count:
+                raise FrameNotFoundError(frame_index)
+            return experiments.start_branch(analysis_id, game, frame_index)
+        except AnalysisNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="The analysis session was not found. Import the file again.",
+            ) from error
+        except FrameNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Frame {frame_index} does not exist in this game.",
+            ) from error
+        except ExperimentBusyError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @application.get("/api/analyses/{analysis_id}/experiment")
+    def get_experiment(analysis_id: str):
+        try:
+            analysis_store.get(analysis_id)
+            return experiments.snapshot(analysis_id)
+        except AnalysisNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="The analysis session was not found. Import the file again.",
+            ) from error
+        except ExperimentNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="Start an experiment from a saved frame first.",
+            ) from error
+
+    def start_experiment_command(analysis_id, command):
+        try:
+            analysis_store.get(analysis_id)
+            if command == "step":
+                return experiments.run_step(analysis_id)
+            return experiments.continue_game(analysis_id)
+        except AnalysisNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="The analysis session was not found. Import the file again.",
+            ) from error
+        except ExperimentNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="Start an experiment from a saved frame first.",
+            ) from error
+        except (ExperimentBusyError, ExperimentFinishedError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @application.post(
+        "/api/analyses/{analysis_id}/experiment/step",
+        status_code=202,
+    )
+    def run_experiment_step(analysis_id: str):
+        """Run exactly one real move on the experiment branch."""
+        return start_experiment_command(analysis_id, "step")
+
+    @application.post(
+        "/api/analyses/{analysis_id}/experiment/continue",
+        status_code=202,
+    )
+    def continue_experiment(analysis_id: str):
+        """Run MCTS moves in the background until the branch is terminal."""
+        return start_experiment_command(analysis_id, "continue")
+
     @application.delete(
         "/api/analyses/{analysis_id}",
         status_code=204,
@@ -204,6 +289,7 @@ def create_app(store=None, predictor=None):
     def delete_analysis(analysis_id: str):
         try:
             analysis_store.remove(analysis_id)
+            experiments.remove(analysis_id)
         except AnalysisNotFoundError as error:
             raise HTTPException(
                 status_code=404,

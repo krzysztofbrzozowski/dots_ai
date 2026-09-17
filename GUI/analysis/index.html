@@ -10,8 +10,8 @@
     />
     <title>Dots — game analysis</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260915-screenshot" />
-    <script type="module" src="/assets/analysis.js?v=20260915-screenshot"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260917-experiment" />
+    <script type="module" src="/assets/analysis.js?v=20260917-experiment"></script>
   </head>
   <body>
     <header class="app-header">
@@ -117,6 +117,22 @@
             <span id="overlay-description">Mean result · player-to-move perspective</span>
             <span id="overlay-scale" class="overlay-scale"><span id="scale-low">Negative</span><i aria-hidden="true"></i><span id="scale-high">Positive</span></span>
           </div>
+
+          <section class="experiment-panel" aria-labelledby="experiment-title">
+            <div class="experiment-copy">
+              <p class="eyebrow">MCTS experiment</p>
+              <h3 id="experiment-title">Branch from the selected saved frame</h3>
+              <p id="experiment-status">
+                Open a game and choose the position you want to replay.
+              </p>
+            </div>
+            <div class="experiment-actions">
+              <button id="start-experiment" type="button" disabled>Start from this frame</button>
+              <button id="step-experiment" type="button" disabled>Run one step</button>
+              <button id="continue-experiment" type="button" disabled>Continue game</button>
+              <button id="show-experiment" class="quiet-button" type="button" disabled>Show branch</button>
+            </div>
+          </section>
 
           <section class="frame-summary" aria-label="Current search summary">
             <div><span>Selected action</span><strong id="frame-action">—</strong></div>
