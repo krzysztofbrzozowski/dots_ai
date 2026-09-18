@@ -17,14 +17,29 @@ from mcts.enclosure import MonteCarloTreeSearch, TwoPlayerMCTSNode
 from training import load_self_play_game
 
 from .audit import audit_collection, inspect_game
-from .collector import collect, collection_files, collection_lock, game_index, game_plan
+from .collector import (
+    available_indices,
+    collect,
+    collection_files,
+    collection_lock,
+    game_identity,
+    game_index,
+    game_plan,
+    rollout_budget,
+    select_child_from_visits,
+)
 from .config import COLLECTION_CONFIG, CollectionConfig
 from .search import CollectionNode
 
 
 SMALL_CONFIG = replace(
-    COLLECTION_CONFIG, rows=3, cols=3, base_seconds_min=0.001,
-    base_seconds_max=0.002, max_move_seconds=0.008, opening_lengths=(0, 2, 4),
+    COLLECTION_CONFIG,
+    rows=3,
+    cols=3,
+    rollouts_per_legal_action=2,
+    minimum_rollouts=10,
+    maximum_rollouts=18,
+    temperature_moves=2,
 )
 
 
@@ -40,39 +55,45 @@ class CollectionTests(unittest.TestCase):
     def test_invalid_configuration_is_rejected(self):
         cases = (
             {"rows": 0}, {"seed": -1}, {"seed": True},
-            {"base_seconds_min": float("nan")}, {"base_seconds_min": 0},
-            {"base_seconds_min": 2}, {"advantage_min": 1},
-            {"advantage_max": 1.5}, {"max_move_seconds": 0.1},
-            {"opening_lengths": ()}, {"opening_lengths": (100,)},
+            {"rollouts_per_legal_action": 0}, {"minimum_rollouts": 0},
+            {"minimum_rollouts": 401}, {"maximum_rollouts": 99},
+            {"temperature_moves": -1}, {"visit_temperature": 0},
+            {"visit_temperature": float("nan")},
         )
         for values in cases:
             with self.subTest(values=values), self.assertRaises(ValueError):
                 replace(COLLECTION_CONFIG, **values)
 
-    def test_schedule_balances_matchups_and_starters_and_resumes_deterministically(self):
+    def test_schedule_balances_starters_and_sources_are_distinct(self):
         for block in range(3):
-            plans = [game_plan(COLLECTION_CONFIG, index) for index in range(block * 8, block * 8 + 8)]
-            counts = Counter((plan["matchup"], plan["starting_player"]) for plan in plans)
-            self.assertEqual(counts, {
-                ("equal", 1): 2, ("equal", -1): 2,
-                ("p1_advantage", 1): 1, ("p1_advantage", -1): 1,
-                ("p2_advantage", 1): 1, ("p2_advantage", -1): 1,
-            })
+            indexes = range(block * 2, block * 2 + 2)
+            plans = [game_plan(COLLECTION_CONFIG, index, "laptop") for index in indexes]
+            self.assertEqual(Counter(plan["starting_player"] for plan in plans), {1: 1, -1: 1})
             for plan in plans:
-                self.assertEqual(plan, game_plan(COLLECTION_CONFIG, plan["index"]))
-                p1, p2 = plan["p1_seconds"], plan["p2_seconds"]
-                self.assertLessEqual(max(p1, p2), COLLECTION_CONFIG.max_move_seconds)
-                if plan["matchup"] == "equal":
-                    self.assertEqual(p1, p2)
-                elif plan["matchup"] == "p1_advantage":
-                    self.assertGreater(p1, p2)
-                else:
-                    self.assertGreater(p2, p1)
-                state = DotsGame(10, 10)
-                state.next_to_move = plan["starting_player"]
-                for move in plan["opening_moves"]:
-                    self.assertIn(tuple(move), state.legal_moves())
-                    state = state.move(move)
+                self.assertEqual(
+                    plan,
+                    game_plan(COLLECTION_CONFIG, plan["index"], "laptop"),
+                )
+                self.assertEqual(plan["matchup"], "equal")
+                self.assertEqual(plan["opening_moves"], [])
+        self.assertNotEqual(
+            game_plan(COLLECTION_CONFIG, 0, "laptop")["search_seed"],
+            game_plan(COLLECTION_CONFIG, 0, "pc2")["search_seed"],
+        )
+
+    def test_adaptive_budget_is_exact_and_bounded(self):
+        self.assertEqual(rollout_budget(COLLECTION_CONFIG, 100), 400)
+        self.assertEqual(rollout_budget(COLLECTION_CONFIG, 70), 280)
+        self.assertEqual(rollout_budget(COLLECTION_CONFIG, 50), 200)
+        self.assertEqual(rollout_budget(COLLECTION_CONFIG, 20), 128)
+        self.assertEqual(rollout_budget(COLLECTION_CONFIG, 5), 128)
+
+    def test_source_streams_use_independent_local_indices(self):
+        existing = {("laptop", 42, 0), ("laptop", 42, 2), ("pc2", 42, 0)}
+        laptop = available_indices(existing, "laptop", 42)
+        pc2 = available_indices(existing, "pc2", 42)
+        self.assertEqual([next(laptop) for _ in range(3)], [1, 3, 4])
+        self.assertEqual([next(pc2) for _ in range(3)], [1, 2, 3])
 
     def test_randomized_nodes_propagate_rng_and_leave_original_mcts_unchanged(self):
         state = DotsGame(4, 4)
@@ -108,12 +129,22 @@ class CollectionTests(unittest.TestCase):
             self.assertEqual(report["replay_validation"], "passed")
             self.assertFalse(report["augmentation"])
             self.assertGreater(report["rollouts"], 0)
+            self.assertEqual(report["sources"], {"local": 8})
+            self.assertEqual(report["opening_lengths"], {0: 8})
+            self.assertEqual(
+                report["visited_legal_fraction"]["median"], 1.0,
+            )
             for path in collection_files(Path(directory) / "3x3"):
-                record = inspect_game(path)
+                record = inspect_game(path, SMALL_CONFIG)
                 game = load_self_play_game(path)
-                count = len(record["opening_moves"])
-                self.assertTrue(np.all(game["visit_counts"][:count] == 0))
-                self.assertTrue(np.all(game["completed_rollouts"][count:] > 0))
+                self.assertEqual(record["opening_moves"], [])
+                expected = [
+                    rollout_budget(SMALL_CONFIG, int(mask.sum()))
+                    for mask in game["legal_masks"]
+                ]
+                self.assertEqual(game["completed_rollouts"].tolist(), expected)
+                self.assertTrue(np.all(game["visit_counts"] > -1))
+                self.assertTrue(np.all(game["completed_rollouts"] > 0))
 
     def test_resume_recovers_manifest_from_npz_without_overwriting_games(self):
         with TemporaryDirectory() as directory:
@@ -126,10 +157,16 @@ class CollectionTests(unittest.TestCase):
             self.assertEqual(session["total_games"], 3)
             manifest = json.loads((board_directory / "manifest.json").read_text())
             self.assertEqual([record["index"] for record in manifest], [0, 1, 2])
+            self.assertEqual({record["source_id"] for record in manifest}, {"local"})
             for name, data in old_files.items():
                 self.assertEqual((board_directory / name).read_bytes(), data)
             with self.assertRaisesRegex(ValueError, "settings differ"):
-                collect(replace(SMALL_CONFIG, seed=99), output_directory=directory, max_games=1, progress=None)
+                collect(
+                    replace(SMALL_CONFIG, rollouts_per_legal_action=3),
+                    output_directory=directory,
+                    max_games=1,
+                    progress=None,
+                )
 
     def test_time_limit_stops_before_another_game_and_interrupt_preserves_files(self):
         with TemporaryDirectory() as directory:
@@ -198,6 +235,34 @@ class CollectionTests(unittest.TestCase):
             for name, content in preserved.items():
                 self.assertEqual((board_directory / name).read_bytes(), content)
             self.assertEqual(audit_collection(board_directory)["games"], 4)
+
+    def test_different_sources_and_seeds_can_share_one_directory(self):
+        with TemporaryDirectory() as directory:
+            collect(
+                SMALL_CONFIG,
+                output_directory=directory,
+                duration_seconds=None,
+                max_games=1,
+                source_id="laptop",
+                progress=None,
+            )
+            collect(
+                replace(SMALL_CONFIG, seed=43),
+                output_directory=directory,
+                duration_seconds=None,
+                max_games=1,
+                source_id="pc2",
+                progress=None,
+            )
+            board_directory = Path(directory) / "3x3"
+            paths = collection_files(board_directory)
+            self.assertEqual(len(paths), 2)
+            self.assertEqual(
+                {game_identity(path) for path in paths},
+                {("laptop", 42, 0), ("pc2", 43, 0)},
+            )
+            report = audit_collection(board_directory)
+            self.assertEqual(report["sources"], {"laptop": 1, "pc2": 1})
 
     def test_parallel_interrupt_drains_active_games_without_starting_more(self):
         first_wait = True

@@ -1,4 +1,4 @@
-"""Run with python -m _game_arena_data_collection --minutes 10."""
+"""Run exact-rollout self-play with a named source and reproducible seed."""
 
 import argparse
 from dataclasses import replace
@@ -17,6 +17,11 @@ def main():
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
                         help=f"Concurrent games in separate CPU processes (default: {DEFAULT_WORKERS}).")
     parser.add_argument("--seed", type=int, default=COLLECTION_CONFIG.seed)
+    parser.add_argument(
+        "--source-id",
+        default="local",
+        help="Short machine/run name used in RNG seeding and filenames (default: local).",
+    )
     parser.add_argument("--output-directory", type=Path, default=DEFAULT_OUTPUT_DIRECTORY)
     parser.add_argument("--audit-only", action="store_true", help="Replay and inspect the existing collection without adding games.")
     args = parser.parse_args()
@@ -26,7 +31,7 @@ def main():
         session = collect(
             config, output_directory=args.output_directory,
             duration_seconds=args.minutes * 60, max_games=args.games,
-            workers=args.workers,
+            workers=args.workers, source_id=args.source_id,
             progress=lambda message: print(message, flush=True),
         )
         print(json.dumps(session, indent=2))

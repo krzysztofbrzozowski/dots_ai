@@ -1,9 +1,11 @@
-"""Collect complete games with balanced matchups and resumable metadata."""
+"""Collect reproducible games with exact rollout budgets."""
 
 from contextlib import contextmanager
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from dataclasses import replace
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import json
 import math
 import multiprocessing
@@ -19,87 +21,130 @@ from time import monotonic
 import numpy as np
 
 from game.enclosure import DotsGame
-from mcts.enclosure import MonteCarloTreeSearch, SearchStats
+from mcts.enclosure import MonteCarloTreeSearch
 from training import SelfPlayTrajectory
 
 from .config import COLLECTION_CONFIG, DEFAULT_OUTPUT_DIRECTORY
 from .search import CollectionNode
 
 
-def game_plan(config, index):
-    """Every shuffled block of eight balances starter and 50/25/25 matchups."""
-    slots = [
-        ("equal", 1), ("equal", -1), ("equal", 1), ("equal", -1),
-        ("p1_advantage", 1), ("p1_advantage", -1),
-        ("p2_advantage", 1), ("p2_advantage", -1),
-    ]
-    schedule_rng = np.random.default_rng(np.random.SeedSequence([config.seed, index // 8, 0]))
-    schedule_rng.shuffle(slots)
-    matchup, starter = slots[index % 8]
-    rng = np.random.default_rng(np.random.SeedSequence([config.seed, index, 1]))
-    base = float(rng.uniform(config.base_seconds_min, config.base_seconds_max))
-    ratio = float(rng.uniform(config.advantage_min, config.advantage_max))
-    stronger = min(config.max_move_seconds, base * ratio)
-    p1_seconds = stronger if matchup == "p1_advantage" else base
-    p2_seconds = stronger if matchup == "p2_advantage" else base
-    opening_length = int(rng.choice(config.opening_lengths))
-    state = DotsGame(config.rows, config.cols)
-    state.next_to_move = starter
-    opening = []
-    for _ in range(opening_length):
-        legal_moves = state.legal_moves()
-        if not legal_moves:
-            break
-        move = legal_moves[int(rng.integers(len(legal_moves)))]
-        opening.append(list(move))
-        state = state.move(move)
+SOURCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+COLLECTION_FILE_PATTERN = re.compile(
+    r"_collection-(?P<source>[A-Za-z0-9_]+)-s(?P<seed>\d+)-g(?P<index>\d+)\.npz$"
+)
+
+
+def validate_source_id(source_id):
+    if not isinstance(source_id, str) or SOURCE_ID_PATTERN.fullmatch(source_id) is None:
+        raise ValueError(
+            "source_id must contain 1-32 letters, digits, or underscores"
+        )
+    return source_id
+
+
+def _source_entropy(source_id):
+    """Return stable seed words; Python's built-in hash is process-randomized."""
+    digest = hashlib.blake2b(source_id.encode("utf-8"), digest_size=8).digest()
+    value = int.from_bytes(digest, "little")
+    return value & 0xFFFFFFFF, value >> 32
+
+
+def game_plan(config, index, source_id="local"):
+    """Return a deterministic equal-strength plan for one source-local index."""
+    validate_source_id(source_id)
+    source_low, source_high = _source_entropy(source_id)
+    schedule_rng = np.random.default_rng(
+        np.random.SeedSequence(
+            [config.seed, source_low, source_high, index // 2, 0]
+        )
+    )
+    starters = [1, -1]
+    schedule_rng.shuffle(starters)
+    starter = starters[index % 2]
+    rng = np.random.default_rng(
+        np.random.SeedSequence(
+            [config.seed, source_low, source_high, index, 1]
+        )
+    )
     return {
         "index": index,
-        "matchup": matchup,
+        "source_id": source_id,
+        "seed": config.seed,
+        "matchup": "equal",
         "starting_player": starter,
-        "p1_seconds": p1_seconds,
-        "p2_seconds": p2_seconds,
         "mode": "serial",
         "workers": 1,
         "search_seed": int(rng.integers(2**63)),
-        "opening_moves": opening,
+        "opening_moves": [],
     }
 
 
+def rollout_budget(config, legal_action_count):
+    """Scale exact simulations with branching while keeping useful bounds."""
+    if legal_action_count <= 0:
+        raise ValueError("legal_action_count must be positive")
+    return min(
+        config.maximum_rollouts,
+        max(
+            config.minimum_rollouts,
+            config.rollouts_per_legal_action * legal_action_count,
+        ),
+    )
+
+
+def select_child_from_visits(root, rng, move_index, config):
+    """Sample early moves from MCTS visits; use most-visited moves later."""
+    if not root.children:
+        raise ValueError("cannot select a move from an unexpanded root")
+    visits = np.asarray([child.n for child in root.children], dtype=np.float64)
+    if np.any(visits <= 0):
+        raise ValueError("every expanded root child must have a completed visit")
+
+    if move_index < config.temperature_moves:
+        log_weights = np.log(visits) / config.visit_temperature
+        weights = np.exp(log_weights - log_weights.max())
+        probabilities = weights / weights.sum()
+        selected_index = int(rng.choice(len(root.children), p=probabilities))
+    else:
+        candidates = np.flatnonzero(visits == visits.max())
+        selected_index = int(rng.choice(candidates))
+    return root.children[selected_index]
+
+
 def play_game(config, plan, output_directory, progress=None):
-    """Run this game's fixed time budgets; record random opening moves honestly."""
+    """Play one game using exact, position-dependent simulation counts."""
     state = DotsGame(config.rows, config.cols)
     state.next_to_move = plan["starting_player"]
     rng = np.random.default_rng(plan["search_seed"])
-    trajectory = SelfPlayTrajectory(simulation_seconds=plan["p1_seconds"])
+    # Schema v1 stores one scalar requested budget. The cap is stored there;
+    # completed_rollouts records the exact adaptive budget for every position.
+    trajectory = SelfPlayTrajectory(simulations_number=config.maximum_rollouts)
     while state.game_result is None:
         move_index = len(trajectory)
         root = CollectionNode(state, rng)
-        if move_index < len(plan["opening_moves"]):
-            action = tuple(plan["opening_moves"][move_index])
-            if action not in root.untried_actions:
-                raise ValueError(f"illegal opening move: {action}")
-            root.untried_actions.remove(action)
-            root.untried_actions.append(action)
-            selected = root.expand()
-            # Random openings did not run MCTS; do not fabricate q/n targets.
-            stats = SearchStats(0, 0, 0.0)
-        else:
-            budget = plan["p1_seconds"] if state.next_to_move == 1 else plan["p2_seconds"]
-            search = MonteCarloTreeSearch(root)
-            selected = search.best_action(total_simulation_seconds=budget)
-            stats = search.last_search_stats
+        legal_action_count = len(root.untried_actions)
+        budget = rollout_budget(config, legal_action_count)
+        search = MonteCarloTreeSearch(root)
+        # best_action runs the search. Collection move choice deliberately uses
+        # visits below so behavior matches the saved policy target.
+        search.best_action(simulations_number=budget)
+        stats = search.last_search_stats
+        selected = select_child_from_visits(root, rng, move_index, config)
         trajectory.record_search(state, root, selected.action, stats)
         state = selected.state
         if progress is not None and len(trajectory) % 20 == 0:
             progress(
                 f"  game {plan['index']}: move {len(trajectory)}, "
+                f"rollouts={budget}, "
                 f"score +1/-1={state.score[1]}/{state.score[-1]}"
             )
     return trajectory.save(
         output_directory,
         final_result=state.game_result,
-        filename_suffix=f"collection-g{plan['index']:06d}",
+        filename_suffix=(
+            f"collection-{plan['source_id']}-s{plan['seed']}"
+            f"-g{plan['index']:08d}"
+        ),
     )
 
 
@@ -134,26 +179,34 @@ def collection_lock(directory):
             fcntl.flock(stream, fcntl.LOCK_UN)
 
 
-def game_index(path):
-    match = re.search(r"_collection-g(\d+)\.npz$", Path(path).name)
+def game_identity(path):
+    match = COLLECTION_FILE_PATTERN.search(Path(path).name)
     if match is None:
         raise ValueError(f"unrecognized NPZ in collection directory: {Path(path).name}")
-    return int(match[1])
+    return (
+        match.group("source"),
+        int(match.group("seed")),
+        int(match.group("index")),
+    )
+
+
+def game_index(path):
+    return game_identity(path)[2]
 
 
 def collection_files(directory):
-    indexed = [(game_index(path), path) for path in Path(directory).glob("*.npz")]
+    indexed = [(game_identity(path), path) for path in Path(directory).glob("*.npz")]
     indexed.sort()
-    if len({index for index, _ in indexed}) != len(indexed):
-        raise ValueError("collection has duplicate game indices")
+    if len({identity for identity, _ in indexed}) != len(indexed):
+        raise ValueError("collection has duplicate source/seed/game identities")
     return [path for _, path in indexed]
 
 
-def available_indices(existing):
-    """Fill gaps left by interrupted workers before allocating new indices."""
+def available_indices(existing, source_id, seed):
+    """Fill gaps in one source stream without colliding with other machines."""
     index = 0
     while True:
-        if index not in existing:
+        if (source_id, seed, index) not in existing:
             yield index
         index += 1
 
@@ -188,7 +241,7 @@ def _play_worker(config, plan, output_directory):
     }
 
 
-def _parallel_games(config, output_directory, indices, workers, started,
+def _parallel_games(config, source_id, output_directory, indices, workers, started,
                     duration_seconds, max_games, on_start, on_complete, progress):
     """Keep at most `workers` games in flight; one coordinator owns metadata."""
     pending = {}
@@ -216,7 +269,7 @@ def _parallel_games(config, output_directory, indices, workers, started,
                         break
                     if duration_seconds is not None and monotonic() - started >= duration_seconds:
                         break
-                    plan = game_plan(config, next(indices))
+                    plan = game_plan(config, next(indices), source_id)
                     on_start(plan)
                     future = executor.submit(_play_worker, config, plan, output_directory)
                     pending[future] = plan
@@ -240,7 +293,8 @@ def _parallel_games(config, output_directory, indices, workers, started,
 
 
 def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTORY,
-            duration_seconds=600, max_games=None, workers=1, progress=print):
+            duration_seconds=600, max_games=None, workers=1,
+            source_id="local", progress=print):
     """Resume this collection. Limits apply to this invocation, not old games.
 
     Time is checked before starting games; active games finish before stopping.
@@ -259,6 +313,7 @@ def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTO
         raise ValueError("provide a time or game-count limit")
     if isinstance(workers, bool) or not isinstance(workers, int) or workers <= 0:
         raise ValueError("workers must be a positive integer")
+    validate_source_id(source_id)
 
     from .audit import inspect_game
 
@@ -266,7 +321,7 @@ def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTO
     directory.mkdir(parents=True, exist_ok=True)
     with collection_lock(directory):
         settings_path = directory / "collection.json"
-        settings = {"version": 1, "settings": config.settings()}
+        settings = {"version": 2, "settings": config.generation_settings()}
         paths = collection_files(directory)
         if settings_path.exists():
             if json.loads(settings_path.read_text()) != settings:
@@ -280,8 +335,11 @@ def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTO
         # saving the manifest. Plans derive from the persisted config + index.
         records = []
         for path in paths:
-            plan = game_plan(config, game_index(path))
-            record = inspect_game(path)
+            file_source_id, file_seed, index = game_identity(path)
+            plan = game_plan(
+                replace(config, seed=file_seed), index, file_source_id,
+            )
+            record = inspect_game(path, replace(config, seed=file_seed))
             verify_plan(record, plan)
             records.append({**plan, **record})
         write_json(directory / "manifest.json", records)
@@ -289,30 +347,39 @@ def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTO
         started_at = datetime.now(timezone.utc).isoformat()
         started = monotonic()
         old_count = len(records)
-        indices = available_indices({record["index"] for record in records})
+        identities = {
+            (record["source_id"], record["seed"], record["index"])
+            for record in records
+        }
+        indices = available_indices(identities, source_id, config.seed)
         interrupted = False
         cpu_seconds = 0.0
 
         def on_start(plan):
             if progress is not None:
                 progress(
-                    f"Starting game {plan['index']}: {plan['matchup']}, "
+                    f"Starting {plan['source_id']} game {plan['index']}: "
                     f"starter={plan['starting_player']:+d}, "
-                    f"seconds +1/-1={plan['p1_seconds']:.3f}/{plan['p2_seconds']:.3f}, "
-                    f"opening={len(plan['opening_moves'])} moves"
+                    f"adaptive rollouts={config.rollouts_per_legal_action}x legal "
+                    f"clipped to {config.minimum_rollouts}-{config.maximum_rollouts}"
                 )
 
         def on_complete(plan, path, statistics):
             nonlocal cpu_seconds
-            record = inspect_game(path)
+            record = inspect_game(path, config)
             verify_plan(record, plan)
             records.append({**plan, **record, **statistics})
-            records.sort(key=lambda item: item["index"])
+            records.sort(
+                key=lambda item: (
+                    item["source_id"], item["seed"], item["index"],
+                )
+            )
             cpu_seconds += statistics.get("cpu_seconds", 0.0)
             write_json(directory / "manifest.json", records)
             if progress is not None:
                 progress(
-                    f"Saved game {plan['index']}: result={record['final_result']:+d}, "
+                    f"Saved {plan['source_id']} game {plan['index']}: "
+                    f"result={record['final_result']:+d}, "
                     f"positions={record['positions']}, "
                     f"collection elapsed={monotonic() - started:.1f}s"
                 )
@@ -322,13 +389,13 @@ def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTO
         try:
             if workers > 1:
                 interrupted = _parallel_games(
-                    config, output_directory, indices, workers, started,
+                    config, source_id, output_directory, indices, workers, started,
                     duration_seconds, max_games, on_start, on_complete, progress,
                 )
             while workers == 1 and (max_games is None or len(records) - old_count < max_games):
                 if duration_seconds is not None and monotonic() - started >= duration_seconds:
                     break
-                plan = game_plan(config, next(indices))
+                plan = game_plan(config, next(indices), source_id)
                 on_start(plan)
                 game_started = monotonic()
                 cpu_started = time.process_time()
@@ -351,6 +418,8 @@ def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTO
             "total_games": len(records),
             "interrupted": interrupted,
             "workers": workers,
+            "source_id": source_id,
+            "seed": config.seed,
             "game_cpu_seconds": cpu_seconds,
             "directory": str(directory),
         }
@@ -361,5 +430,5 @@ def collect(config=COLLECTION_CONFIG, *, output_directory=DEFAULT_OUTPUT_DIRECTO
 def verify_plan(record, plan):
     if record["starting_player"] != plan["starting_player"]:
         raise ValueError("recorded starter differs from game plan")
-    if record["opening_moves"] != plan["opening_moves"]:
-        raise ValueError("recorded random opening differs from game plan")
+    if record["opening_moves"]:
+        raise ValueError("rollout collection must not contain random openings")

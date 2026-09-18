@@ -1,114 +1,148 @@
-# Game data collection
+# Rollout-based game data collection
 
-This package collects complete MCTS-versus-MCTS games without augmentation or
-neural-network evaluation. It reuses the game engine, MCTS search/backup, NPZ
-writer and analysis loader. Collection-specific randomization lives in this
-folder; the existing `_game_arena` and `mcts` implementations are unchanged.
+This package collects complete MCTS-versus-MCTS games for policy/value
+training. It uses exact simulation counts instead of per-move time limits, so
+the search quality does not depend on CPU speed or temporary machine load.
+No augmentation is applied during collection.
 
 From the project root, with the virtual environment active:
 
 ```bash
-python -m _game_arena_data_collection --minutes 10
-python -m _game_arena_data_collection --minutes 10 --workers 8
-python -m _game_arena_data_collection --minutes 10 --workers 1
-python -m _game_arena_data_collection --minutes 10 --games 8
+python -m _game_arena_data_collection --minutes 10 --workers 8 \
+  --source-id laptop --seed 42
+
+python -m _game_arena_data_collection --games 100 --workers 8 \
+  --source-id laptop --seed 42
+
 python -m _game_arena_data_collection --audit-only
 python -m unittest _game_arena_data_collection.test_collection
 ```
 
-The duration and game-count limits apply to each invocation. The collector
-finishes active games when the time limit is reached, so a run may exceed
-the requested duration by the longest active game's remaining time. With
-multiple workers, Ctrl-C stops new games and finishes/saves the active games.
-With one worker, Ctrl-C discards its unfinished game. Completed files remain
-usable and the next run resumes.
+The default output is separate from the old seconds-based collection:
 
-## CPU parallelism
+```text
+training_data/_game_arena_data_collection_rollouts/10x10/
+```
 
-`--workers N` runs up to N independent games in separate processes. The CLI
-defaults to `min(8, max(1, CPU count - 2))` (8 on this 14-core M4 Pro).
-The Python `collect()` API retains `workers=1` by default. Each game uses
-one serial MCTS search; no nested worker pools are created. This stage runs
-game simulations on the CPU and does not use a neural network or GPU.
+## Exact rollout budget
 
-The coordinator alone updates the manifest; workers atomically save separate
-NPZ files. Games can finish out of order. If a process crashes, resuming fills
-missing game indices without overwriting completed games. The worker count
-is an execution setting, so it can change when resuming an existing collection.
-`last_session.json` records the requested worker count and total CPU time
-spent playing games; the manifest records runtime statistics for new games.
+For a position with `L` legal actions, the default budget is:
 
-Use `--workers 1` for sequential collection or increase the count to use more
-CPU cores. More workers do not automatically make individual moves stronger:
-the per-move wall-clock budgets stay the same. Oversubscribing the CPU can
-reduce rollouts per move, so compare the audit's rollout counts as well as
-games per minute. A small fixed batch may leave workers idle while its last,
-more expensive games finish; a longer timed run keeps starting new games.
+```text
+min(400, max(128, 4 * L))
+```
 
-## Configuration and matchups
+Examples:
 
-Edit `COLLECTION_CONFIG` in `config.py`. Default board size is 10×10. Both
-players run serial MCTS within their game's process, so comparisons use the
-same execution mode. Each game samples a base time between 0.10 and 0.20 seconds per move.
-An advantaged player receives 2–4 times this budget, capped at 0.80 seconds.
-These are short pilot budgets; stronger labels may need longer searches.
+| Legal actions | Completed rollouts |
+| ---: | ---: |
+| 100 | 400 |
+| 70 | 280 |
+| 50 | 200 |
+| 20 | 128 |
+| 5 | 128 |
 
-Every shuffled block of eight games contains:
+Every legal root action is therefore expanded at least once on a 10x10 board.
+Unlike a wall-clock budget, an exact simulation budget is reproducible and
+comparable between a laptop and another computer. The settings are editable in
+`config.py`.
 
-| Matchup | Games | Starting players |
-| --- | ---: | --- |
-| Equal budgets | 4 | twice +1, twice -1 |
-| Higher budget for +1 | 2 | once +1, once -1 |
-| Higher budget for -1 | 2 | once +1, once -1 |
+The schema-v1 `requested_simulations` scalar stores the maximum configured
+budget for compatibility with the existing loader and analysis GUI. The
+`completed_rollouts` array stores the exact number actually performed for every
+position. The audit verifies every value against the formula above.
 
-Budget and starter are fixed for a game. A partly completed block does not
-necessarily have exact proportions. A higher budget does not guarantee a win,
-and the collector never changes labels or discards games based on their result.
+## Policy-consistent move selection
 
-Each game chooses 0, 2, 4 or 6 random legal opening moves. MCTS then plays to
-completion. `CollectionNode` shuffles the untried actions at every tree node
-and seeds random rollouts. This removes the original fixed expansion order's
-systematic preference for a particular end of the coordinate list.
+There are no completely random opening moves. Every saved position runs MCTS
+and therefore has a real policy target.
 
-Configuration selection and opening moves are reproducible from the collection
-seed and game index. Timed MCTS games are not guaranteed to be bit-for-bit
-reproducible, because machine load affects the completed rollout count.
+- During the first 20 moves, the played action is sampled from the normalized
+  root visit counts with temperature 1.0.
+- From move 21 onward, the most-visited root action is played. Ties are broken
+  with the game's seeded random generator.
 
-## Output and resuming
+This provides diverse openings while keeping played actions consistent with
+the visit-count distribution used to train the policy head. Both players use
+the same rollout formula; asymmetric strength experiments should be collected
+separately from the main training dataset.
 
-Files are saved under `training_data/_game_arena_data_collection/10x10/`:
+## Parallel computers: source ID and seed
 
-- One schema-v1 `.npz` per completed game, compatible with `load_self_play_game`,
-  the existing analysis GUI and `ml.data_loader`.
-- `collection.json`: generation settings, checked before resuming.
-- `manifest.json`: per-game budget, starter, seed, actual opening, result,
-  final scores and measured search statistics.
-- `last_session.json`: duration, game count, concurrency and game CPU time
-  from the latest invocation.
-- `audit.json` and `report.md`: replay validation and collection statistics.
+`source-id` is a short name for the machine or collection stream. It accepts
+letters, digits, and underscores. Both `source-id` and `seed` affect the random
+game stream and are embedded in every filename.
 
-Use `--output-directory PATH` for another collection, and `--seed INTEGER`
-to override the configuration seed. Reusing a directory with different
-generation settings is rejected. An OS file lock prevents simultaneous writers.
-The manifest is recoverable from completed NPZ files and the persisted settings
-if a process stops between saving a game and updating its metadata.
+For example:
 
-The legacy NPZ `requested_simulation_seconds` scalar describes Player +1's
-budget. Read the manifest for **both** players' budgets. Random opening moves
-are included in the trajectory with zero visits, zero q values and zero search
-time. They are valid value-training examples, but must be excluded or handled
-separately when deriving a future policy target from visit counts.
+```bash
+# Laptop
+python -m _game_arena_data_collection --minutes 480 --workers 8 \
+  --source-id laptop --seed 42
 
-## Verification
+# Another computer
+python -m _game_arena_data_collection --minutes 480 --workers 8 \
+  --source-id pc2 --seed 43
+```
 
-Every completed game is replayed from the empty board. The audit verifies each
-stored board, territory, score, next player, legal mask, chosen action and final
-result; it also checks visit/rollout counts and compatibility with the existing
-analysis loader. No incomplete game receives a training label.
+Example filenames:
 
-The final report includes outcomes by matchup, starting-player counts, opening
-lengths, early move locations, duplicate trajectories/positions and rollout
-counts. These checks establish format integrity and describe diversity; they
-do not prove that the resulting model will play well. Split training and
-validation by complete games. Any future augmentation belongs in the training
-input pipeline after that split, not in this collector.
+```text
+..._collection-laptop-s42-g00000000.npz
+..._collection-pc2-s43-g00000000.npz
+```
+
+The local game index may be the same because the complete identity is
+`(source-id, seed, game index)`. Files from several machines can therefore be
+copied into the same `10x10` directory without name or manifest collisions, as
+long as their rollout-generation settings are identical. Using distinct
+source IDs is sufficient to create distinct deterministic streams; using a
+different seed as well makes the intent explicit.
+
+Do not reuse the same `source-id` and seed independently on two computers: both
+would intentionally generate the same deterministic stream.
+
+## CPU parallelism and stopping
+
+`--workers N` runs up to N independent games in separate CPU processes. Each
+game uses one serial MCTS search. The default is
+`min(8, max(1, CPU count - 2))`.
+
+The minute and game limits apply to one invocation. The collector checks the
+time before starting another game and lets active parallel games finish and
+save. Ctrl-C stops new submissions and drains active parallel games. Completed
+files remain usable and a later invocation with the same source ID and seed
+fills missing local indexes before allocating new ones.
+
+The coordinator exclusively updates metadata, while workers atomically save
+separate NPZ files. An OS lock prevents two collector processes from writing
+to the same directory at the same time. Parallel collection on separate
+computers uses separate local directories; the completed files can be merged
+afterward.
+
+## Files and verification
+
+The output directory contains:
+
+- one schema-v1 `.npz` per completed game;
+- `collection.json` with rollout-generation settings;
+- `manifest.json` with source, seed, index, result, runtime and aggregate
+  search information for every game;
+- `last_session.json` describing the last invocation;
+- `audit.json` and `report.md` with replay and policy-target quality metrics.
+
+Every game is replayed from the empty board. The audit checks boards,
+territories, scores, player turns, legal masks, chosen actions, final results,
+root visit totals and exact adaptive rollout budgets. It also reports quality
+percentiles for the whole collection and for moves 1-20, 21-40, 41-60, 61-80
+and 81-100, including:
+
+- rollouts per position and per legal action;
+- fraction of legal actions visited and revisited;
+- normalized visit-distribution entropy;
+- top-action visit share;
+- results, starter balance, source counts and position diversity.
+
+Split training, validation and test data by complete games. Any D4
+augmentation belongs in the training input pipeline after that split, not in
+this collector.
