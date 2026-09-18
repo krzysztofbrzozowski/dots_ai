@@ -1,4 +1,4 @@
-"""Load saved games as value-model samples."""
+"""Load saved games as value-only or policy/value training samples."""
 
 from pathlib import Path
 
@@ -121,8 +121,8 @@ def load_game_samples(path):
     return game_to_samples(game)
 
 
-def load_training_data(directory, validation_fraction=0.2, seed=42, test_fraction=0.0):
-    """Split complete games into train/validation and, optionally, test sets."""
+def split_game_paths(directory, validation_fraction=0.2, seed=42, test_fraction=0.0):
+    """Shuffle and split complete games without leaking positions between sets."""
     if not 0 < validation_fraction < 1:
         raise ValueError("validation_fraction must be between 0 and 1")
     if not 0 <= test_fraction < 1:
@@ -149,15 +149,166 @@ def load_training_data(directory, validation_fraction=0.2, seed=42, test_fractio
     test_paths = game_paths[:test_count]
     validation_paths = game_paths[test_count:test_count + validation_count]
     training_paths = game_paths[test_count + validation_count:]
+    return training_paths, validation_paths, test_paths
 
-    def load_many(paths):
-        loaded = [load_game_samples(path) for path in paths]
-        board_samples = np.concatenate([item[0][0] for item in loaded], axis=0)
-        score_features = np.concatenate([item[0][1] for item in loaded], axis=0)
-        labels = np.concatenate([item[1] for item in loaded], axis=0)
-        return (board_samples, score_features), labels
 
-    datasets = load_many(training_paths), load_many(validation_paths)
+def load_many_game_samples(paths):
+    """Concatenate value-model samples from a collection of complete games"""
+    loaded = [load_game_samples(path) for path in paths]
+    board_samples = np.concatenate([item[0][0] for item in loaded], axis=0)
+    score_features = np.concatenate([item[0][1] for item in loaded], axis=0)
+    labels = np.concatenate([item[1] for item in loaded], axis=0)
+    # e.g.
+    # board_samples.shape
+    # (295, 10, 10, 5)
+    # 295 -> total number of positions from all loaded games (100, 100, 95)
+    # 10  -> number of board rows
+    # 10  -> number of board columns
+    # 5   -> number of features/channels for each board cell:
+    #        0: current player's dots
+    #        1: opponent's dots
+    #        2: current player's territory
+    #        3: opponent's territory
+    #        4: legal moves
+
+    # score_features.shape
+    # (295, 2)
+    # 295 -> one score pair for each position
+    # 2   -> [current player's score, opponent's score]
+
+    # labels.shape
+    # (295,)
+    # 295 -> one value label for each position
+    # Each label describes the final game result from the perspective
+    # of the player whose turn it is in that position:
+    # 0 -> loss
+    # 1 -> draw
+    # 2 -> win
+    return (board_samples, score_features), labels
+
+
+def load_policy_targets(game_paths, expected_sample_count, board_shape):
+    """Return normalized MCTS visit targets and their per-position weights.
+
+    A zero weight marks a position without MCTS visits, such as a random
+    opening. It can still train the value head without teaching policy an
+    artificial uniform distribution.
+    """
+
+    action_count = int(np.prod(board_shape))
+    # Create array
+    # [
+    #   0           -> [0...100]
+    #   ...
+    #   5756458     -> [0...100]
+    # ]
+    policy_targets = np.zeros(
+        (expected_sample_count, action_count), dtype=np.float32,
+    )
+    policy_weights = np.zeros(expected_sample_count, dtype=np.float32)
+    offset = 0
+
+    for path in game_paths:
+        game = load_self_play_game(path)
+        visit_counts = game["visit_counts"].astype(np.float32)
+        legal_mask = game["legal_masks"].astype(np.float32)
+        if visit_counts.shape[1:] != tuple(board_shape):
+            raise ValueError("policy board shape does not match value samples")
+
+        legal_visits = visit_counts * legal_mask
+        visit_totals = legal_visits.sum(axis=(1, 2), keepdims=True)
+        valid_policy = visit_totals[:, 0, 0] > 0
+        normalized_visits = np.divide(
+            legal_visits,
+            visit_totals,
+            out=np.zeros_like(legal_visits),
+            where=visit_totals > 0,
+        )
+
+        stop = offset + len(normalized_visits)
+        if stop > expected_sample_count:
+            raise ValueError("policy samples do not match value samples")
+        policy_targets[offset:stop] = normalized_visits.reshape(-1, action_count)
+        policy_weights[offset:stop] = valid_policy.astype(np.float32)
+        offset = stop
+
+    if offset != expected_sample_count:
+        raise ValueError(
+            f"loaded {offset} policy samples; expected {expected_sample_count}"
+        )
+    return policy_targets, policy_weights
+
+
+def policy_and_value_heads_targets(game_paths, value_dataset):
+    """Attach policy targets and independent head weights to value samples."""
+    # inputs = (
+    #     board_samples, 
+    #     score_features,
+    # )
+    # value_labels = labels
+    inputs, value_labels = value_dataset
+    # inputs[0].shape
+    # (295, 10, 10, 5)
+    # inputs[0].shape[1:3] -> 10, 10
+    board_shape = inputs[0].shape[1:3]
+    policy_targets, policy_weights = load_policy_targets(game_paths, len(value_labels), board_shape)
+    targets = {
+        "policy": policy_targets,
+        "value": value_labels,
+    }
+    sample_weights = {
+        "policy": policy_weights,
+        "value": np.ones(len(value_labels), dtype=np.float32),
+    }
+    return inputs, targets, sample_weights
+
+
+def load_training_data(directory, validation_fraction=0.2, seed=42, test_fraction=0.0):
+    """Load value-only train/validation and, optionally, test sets."""
+    training_paths, validation_paths, test_paths = split_game_paths(
+        directory,
+        validation_fraction=validation_fraction,
+        seed=seed,
+        test_fraction=test_fraction,
+    )
+    datasets = (
+        load_many_game_samples(training_paths),
+        load_many_game_samples(validation_paths),
+    )
     if test_fraction > 0:
-        return (*datasets, load_many(test_paths))
+        return (*datasets, load_many_game_samples(test_paths))
+    return datasets
+
+
+def load_dual_head_training_data(
+    directory,
+    validation_fraction=0.2,
+    seed=42,
+    test_fraction=0.0,
+):
+    """Load inputs, policy/value targets, and per-head sample weights."""
+    training_paths, validation_paths, test_paths = split_game_paths(
+        directory,
+        validation_fraction=validation_fraction,
+        seed=seed,
+        test_fraction=test_fraction,
+    )
+    datasets = (
+        policy_and_value_heads_targets(
+            training_paths,
+            load_many_game_samples(training_paths),
+        ),
+        policy_and_value_heads_targets(
+            validation_paths,
+            load_many_game_samples(validation_paths),
+        ),
+    )
+    if test_fraction > 0:
+        return (
+            *datasets,
+            policy_and_value_heads_targets(
+                test_paths,
+                load_many_game_samples(test_paths),
+            ),
+        )
     return datasets
