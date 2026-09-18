@@ -11,6 +11,7 @@ from ml.predictor import (
     analysis_frame_to_game_state,
     game_state_to_model_input,
     predict_move,
+    predict_policy,
 )
 from ml.training_pipeline import (
     batched_array_dataset,
@@ -63,6 +64,31 @@ def test_candidate_prediction_is_returned_for_the_player_making_the_move():
     assert abs(prediction["win"] - 0.2) < 1e-6
     assert abs(prediction["value"] - (-0.3)) < 1e-6
     assert prediction["source"] == "model"
+
+
+def test_dual_head_policy_is_normalized_only_over_legal_moves():
+    class FakeDualHeadModel:
+        input_shape = [(None, 2, 2, 5), (None, 2)]
+
+        def predict(self, model_input, verbose=0):
+            assert model_input[0].shape == (1, 2, 2, 5)
+            assert model_input[1].shape == (1, 2)
+            assert verbose == 0
+            return {
+                "policy": np.asarray([[1.0, 2.0, 100.0, 3.0]], dtype=np.float32),
+                "value": np.asarray([[0.2, 0.3, 0.5]], dtype=np.float32),
+            }
+
+    state = DotsGame(2, 2)
+    state.board[1, 0] = 1
+    prediction = predict_policy(FakeDualHeadModel(), state)
+    policy = np.asarray(prediction["policy"])
+
+    assert policy.shape == (2, 2)
+    assert policy[1, 0] == 0
+    assert abs(policy.sum() - 1.0) < 1e-6
+    assert prediction["top_moves"][0]["coordinate"] == [1, 1]
+    assert prediction["top_moves"][1]["coordinate"] == [0, 1]
 
 
 def test_saved_analysis_frame_becomes_an_independent_playable_state():

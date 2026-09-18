@@ -44,6 +44,7 @@ export class DotsBoardRenderer {
     this.onCellSelected = onCellSelected;
     this.frame = null;
     this.overlay = "value";
+    this.headPolicy = null;
     this.selectedCell = null;
     this.layout = null;
 
@@ -56,6 +57,7 @@ export class DotsBoardRenderer {
   }
 
   setFrame(frame) {
+    if (this.frame !== frame) this.headPolicy = null;
     this.frame = frame;
     this.canvas.classList.toggle("is-interactive", Boolean(frame));
     this.resizeAndDraw();
@@ -64,6 +66,11 @@ export class DotsBoardRenderer {
   setOverlay(overlay) {
     this.overlay = overlay;
     this.canvas.classList.toggle("is-head-value", overlay === "head-value");
+    this.draw();
+  }
+
+  setHeadPolicy(policy) {
+    this.headPolicy = policy;
     this.draw();
   }
 
@@ -210,6 +217,7 @@ export class DotsBoardRenderer {
 
   drawSearchOverlay() {
     const { step, originX, originY } = this.layout;
+    const isHeadPolicy = this.overlay === "head-policy";
     const totalVisits = this.frame.visit_counts
       .flat()
       .reduce((sum, value) => sum + value, 0);
@@ -217,8 +225,15 @@ export class DotsBoardRenderer {
 
     for (let row = 0; row < this.frame.rows; row += 1) {
       for (let col = 0; col < this.frame.cols; col += 1) {
+        if (!this.frame.legal_mask[row][col]) continue;
+        if (isHeadPolicy) {
+          const probability = this.headPolicy?.[row]?.[col];
+          if (Number.isFinite(probability)) values.push(probability);
+          continue;
+        }
+
         const visits = this.frame.visit_counts[row][col];
-        if (!this.frame.legal_mask[row][col] || !visits) continue;
+        if (!visits) continue;
         const rawQ = this.frame.q_values[row][col];
         if (this.overlay === "value") values.push(Math.abs(rawQ / visits));
         if (this.overlay === "raw-q") values.push(Math.abs(rawQ));
@@ -240,7 +255,7 @@ export class DotsBoardRenderer {
         const visits = this.frame.visit_counts[row][col];
         const rawQ = this.frame.q_values[row][col];
 
-        if (!visits) {
+        if (!isHeadPolicy && !visits) {
           // A stored q value of zero is ambiguous. An empty ring makes it clear
           // that this legal action has not received a completed rollout.
           this.context.strokeStyle = cssColor("--unvisited-action");
@@ -251,11 +266,17 @@ export class DotsBoardRenderer {
           continue;
         }
 
-        let overlayValue = visits;
-        if (this.overlay === "value") overlayValue = rawQ / visits;
-        if (this.overlay === "raw-q") overlayValue = rawQ;
-        if (this.overlay === "policy") {
-          overlayValue = totalVisits ? visits / totalVisits : 0;
+        let overlayValue;
+        if (isHeadPolicy) {
+          overlayValue = this.headPolicy?.[row]?.[col];
+          if (!Number.isFinite(overlayValue)) continue;
+        } else {
+          overlayValue = visits;
+          if (this.overlay === "value") overlayValue = rawQ / visits;
+          if (this.overlay === "raw-q") overlayValue = rawQ;
+          if (this.overlay === "policy") {
+            overlayValue = totalVisits ? visits / totalVisits : 0;
+          }
         }
 
         const intensity = Math.min(1, Math.abs(overlayValue) / maximumMagnitude);
@@ -304,15 +325,21 @@ export class DotsBoardRenderer {
       for (let col = 0; col < this.frame.cols; col += 1) {
         if (!this.frame.legal_mask[row][col]) continue;
 
-        const visits = this.frame.visit_counts[row][col];
-        if (!visits) continue;
-
-        const label = formatOverlayValue(
-          this.overlay,
-          this.frame.q_values[row][col],
-          visits,
-          totalVisits,
-        );
+        let label;
+        if (this.overlay === "head-policy") {
+          const probability = this.headPolicy?.[row]?.[col];
+          if (!Number.isFinite(probability)) continue;
+          label = `${(probability * 100).toFixed(1)}%`;
+        } else {
+          const visits = this.frame.visit_counts[row][col];
+          if (!visits) continue;
+          label = formatOverlayValue(
+            this.overlay,
+            this.frame.q_values[row][col],
+            visits,
+            totalVisits,
+          );
+        }
         const x = originX + col * step;
         const y = originY + row * step;
 

@@ -24,7 +24,7 @@ from analysis.service import (
     analysis_frame,
     analysis_summary,
 )
-from ml.predictor import ValueHeadPredictor, ValueHeadUnavailableError
+from ml.predictor import DualHeadPredictor, DualHeadUnavailableError
 
 
 PROJECT_DIRECTORY = Path(__file__).resolve().parent.parent
@@ -60,7 +60,7 @@ async def _read_request_body_with_limit(request):
 def create_app(store=None, predictor=None, experiment_manager=None):
     """Build an application with an injectable store for isolated tests."""
     analysis_store = store or AnalysisStore()
-    value_head_predictor = predictor or ValueHeadPredictor()
+    dual_head_predictor = predictor or DualHeadPredictor()
     experiments = experiment_manager or ExperimentManager()
     application = FastAPI(
         title="Dots MCTS Analysis API",
@@ -167,7 +167,7 @@ def create_app(store=None, predictor=None, experiment_manager=None):
                     detail=f"Position ({row}, {col}) is not a legal move.",
                 )
 
-            prediction = value_head_predictor.predict_analysis_move(
+            prediction = dual_head_predictor.predict_analysis_move(
                 game,
                 frame_index,
                 (row, col),
@@ -196,7 +196,54 @@ def create_app(store=None, predictor=None, experiment_manager=None):
                 status_code=404,
                 detail=f"Frame {frame_index} does not exist in this game.",
             ) from error
-        except ValueHeadUnavailableError as error:
+        except DualHeadUnavailableError as error:
+            PRINT_T(str(error), level="error", source="MODEL")
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        except ValueError as error:
+            PRINT_T(str(error), level="error", source="MODEL")
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @application.get(
+        "/api/analyses/{analysis_id}/frames/{frame_index}/head-policy"
+    )
+    def get_head_policy(analysis_id: str, frame_index: int):
+        """Predict a legal-action distribution for one saved position."""
+        started_at = perf_counter()
+        try:
+            game = analysis_store.get(analysis_id)
+            if not 0 <= frame_index < game.frame_count:
+                raise FrameNotFoundError(frame_index)
+
+            prediction = dual_head_predictor.predict_analysis_policy(
+                game,
+                frame_index,
+            )
+            elapsed_ms = (perf_counter() - started_at) * 1000
+            top_move = prediction["top_moves"][0]
+            PRINT_T(
+                f"{prediction['model']} · frame {frame_index + 1} · "
+                f"policy top {tuple(top_move['coordinate'])} "
+                f"{top_move['probability']:.1%} · {elapsed_ms:.1f} ms",
+                level="success",
+                source="MODEL",
+            )
+            return {
+                "frame_index": frame_index,
+                "move_number": frame_index + 1,
+                "elapsed_ms": round(elapsed_ms, 3),
+                **prediction,
+            }
+        except AnalysisNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail="The analysis session was not found. Import the file again.",
+            ) from error
+        except FrameNotFoundError as error:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Frame {frame_index} does not exist in this game.",
+            ) from error
+        except DualHeadUnavailableError as error:
             PRINT_T(str(error), level="error", source="MODEL")
             raise HTTPException(status_code=503, detail=str(error)) from error
         except ValueError as error:

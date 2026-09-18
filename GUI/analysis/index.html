@@ -10,8 +10,8 @@
     />
     <title>Dots — game analysis</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260917-forced-replay" />
-    <script type="module" src="/assets/analysis.js?v=20260917-forced-replay"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260918-policy-head" />
+    <script type="module" src="/assets/analysis.js?v=20260918-policy-head"></script>
   </head>
   <body>
     <header class="app-header">
@@ -77,6 +77,7 @@
               <span id="player-pill" class="player-pill">No frame</span>
               <div id="overlay-switcher" class="overlay-switcher" role="group" aria-label="Board overlay">
                 <button type="button" data-overlay="head-value" aria-pressed="false" title="Predict the outcome after a clicked legal move">Head value</button>
+                <button type="button" data-overlay="head-policy" aria-pressed="false" title="Show the neural policy for every legal move">Policy head</button>
                 <button class="is-active" type="button" data-overlay="value" aria-pressed="true" title="Mean rollout result (Q divided by visits)">Q / N</button>
                 <button type="button" data-overlay="raw-q" aria-pressed="false" title="Saved win/loss balance">Raw Q</button>
                 <button type="button" data-overlay="visits" aria-pressed="false" title="Completed visits per action">Visits</button>
@@ -162,7 +163,7 @@
                 <p class="eyebrow">Value-head prediction</p>
                 <h3 id="head-value-title">Select a legal move</h3>
               </div>
-              <span id="head-value-model" class="model-chip">10x10_083769_3conv_d4_normalized.keras</span>
+              <span id="head-value-model" class="model-chip">10x10_083769_dual_head_v1.keras</span>
             </div>
             <p id="head-value-message" class="head-value-message">
               Click an empty legal position to evaluate the result after that move.
@@ -172,6 +173,25 @@
               <div><span>Draw</span><strong id="head-value-draw">—</strong></div>
               <div><span>Win</span><strong id="head-value-win">—</strong></div>
               <div class="head-value-primary"><span>Head value</span><strong id="head-value-score">—</strong></div>
+            </div>
+          </section>
+
+          <section id="head-policy-panel" class="head-value-panel head-policy-panel" aria-labelledby="head-policy-title" hidden>
+            <div class="head-value-heading">
+              <div>
+                <p class="eyebrow">Policy-head prediction</p>
+                <h3 id="head-policy-title">Current position</h3>
+              </div>
+              <span id="head-policy-model" class="model-chip">10x10_083769_dual_head_v1.keras</span>
+            </div>
+            <p id="head-policy-message" class="head-value-message">
+              Open a saved frame to predict probabilities for all legal moves.
+            </p>
+            <div class="head-value-results" aria-label="Policy-head move probabilities">
+              <div><span>Selected move</span><strong id="head-policy-selected">—</strong></div>
+              <div><span>Selected prior</span><strong id="head-policy-selected-prior">—</strong></div>
+              <div><span>Top move</span><strong id="head-policy-top-move">—</strong></div>
+              <div class="head-value-primary"><span>Top prior</span><strong id="head-policy-top-prior">—</strong></div>
             </div>
           </section>
         </article>

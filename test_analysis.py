@@ -188,12 +188,13 @@ def test_loader_rejects_non_npz_bytes_and_file_extensions():
 
 
 def test_analysis_api_imports_reads_and_releases_a_game():
-    class StubValueHeadPredictor:
+    class StubDualHeadPredictor:
         def __init__(self):
-            self.calls = []
+            self.value_calls = []
+            self.policy_calls = []
 
         def predict_analysis_move(self, game, frame_index, move):
-            self.calls.append((game.game_id, frame_index, move))
+            self.value_calls.append((game.game_id, frame_index, move))
             return {
                 "coordinate": list(move),
                 "player": int(game.next_players[frame_index]),
@@ -205,7 +206,20 @@ def test_analysis_api_imports_reads_and_releases_a_game():
                 "source": "model",
             }
 
-    predictor = StubValueHeadPredictor()
+        def predict_analysis_policy(self, game, frame_index):
+            self.policy_calls.append((game.game_id, frame_index))
+            return {
+                "player": int(game.next_players[frame_index]),
+                "model": "test-dual-head.keras",
+                "policy": [[0.1, 0.2], [0.3, 0.4]],
+                "top_moves": [
+                    {"coordinate": [1, 1], "probability": 0.4},
+                    {"coordinate": [1, 0], "probability": 0.3},
+                ],
+                "source": "model",
+            }
+
+    predictor = StubDualHeadPredictor()
     client = TestClient(
         create_app(
             AnalysisStore(maximum_sessions=2),
@@ -242,7 +256,22 @@ def test_analysis_api_imports_reads_and_releases_a_game():
     assert head_value["model"] == "test-value-head.keras"
     assert head_value["value"] == 0.3
     assert head_value["elapsed_ms"] >= 0
-    assert predictor.calls == [("test-game", 0, (0, 1))]
+    assert predictor.value_calls == [("test-game", 0, (0, 1))]
+
+    head_policy_response = client.get(
+        f"/api/analyses/{analysis_id}/frames/0/head-policy"
+    )
+    assert head_policy_response.status_code == 200
+    head_policy = head_policy_response.json()
+    assert head_policy["player"] == 1
+    assert head_policy["model"] == "test-dual-head.keras"
+    assert head_policy["policy"] == [[0.1, 0.2], [0.3, 0.4]]
+    assert head_policy["top_moves"][0] == {
+        "coordinate": [1, 1],
+        "probability": 0.4,
+    }
+    assert head_policy["elapsed_ms"] >= 0
+    assert predictor.policy_calls == [("test-game", 0)]
 
     illegal_head_value = client.get(
         f"/api/analyses/{analysis_id}/frames/1/head-value?row=0&col=0"
@@ -363,6 +392,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert 'id="diagnostics-output"' in page.text
     assert 'id="screenshot-button"' in page.text
     assert 'data-overlay="head-value"' in page.text
+    assert 'data-overlay="head-policy"' in page.text
     assert 'data-overlay="none"' in page.text
     assert 'id="start-experiment"' in page.text
     assert 'id="step-experiment"' in page.text
@@ -374,6 +404,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert script.status_code == 200
     assert "importGame" in script.text
     assert "requestHeadValue" in script.text
+    assert "requestHeadPolicy" in script.text
     assert "logDiagnostic" in script.text
     assert "downloadSquareScreenshot" in script.text
     assert "startExperimentFromSelectedFrame" in script.text

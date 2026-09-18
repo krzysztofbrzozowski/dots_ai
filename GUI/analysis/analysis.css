@@ -1730,7 +1730,8 @@ kbd {
     flex-wrap: wrap;
     flex: 1;
   }
-  .overlay-switcher [data-overlay="head-value"] {
+  .overlay-switcher [data-overlay="head-value"],
+  .overlay-switcher [data-overlay="head-policy"] {
     flex-basis: 100%;
   }
   .overlay-switcher button {

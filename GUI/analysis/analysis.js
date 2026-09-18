@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260915-screenshot";
+} from "/shared/board_renderer.js?v=20260918-policy-head";
 
 
 const elements = {
@@ -51,6 +51,14 @@ const elements = {
   headValueDraw: document.querySelector("#head-value-draw"),
   headValueWin: document.querySelector("#head-value-win"),
   headValueScore: document.querySelector("#head-value-score"),
+  headPolicyPanel: document.querySelector("#head-policy-panel"),
+  headPolicyTitle: document.querySelector("#head-policy-title"),
+  headPolicyModel: document.querySelector("#head-policy-model"),
+  headPolicyMessage: document.querySelector("#head-policy-message"),
+  headPolicySelected: document.querySelector("#head-policy-selected"),
+  headPolicySelectedPrior: document.querySelector("#head-policy-selected-prior"),
+  headPolicyTopMove: document.querySelector("#head-policy-top-move"),
+  headPolicyTopPrior: document.querySelector("#head-policy-top-prior"),
   experimentPanel: document.querySelector(".experiment-panel"),
   experimentTitle: document.querySelector("#experiment-title"),
   experimentStatus: document.querySelector("#experiment-status"),
@@ -96,6 +104,10 @@ const view = {
   headValueCache: new Map(),
   headValueRequestNumber: 0,
   headValueController: null,
+  headPolicyCache: new Map(),
+  headPolicyPrediction: null,
+  headPolicyRequestNumber: 0,
+  headPolicyController: null,
   experiment: null,
   experimentRequestPending: false,
   experimentPollTimer: null,
@@ -141,11 +153,13 @@ const timelineResizeObserver = new ResizeObserver(() => {
 timelineResizeObserver.observe(elements.timelineWheel);
 
 
-function updateHeadValueWorkspaceHeight() {
-  if (elements.headValuePanel.hidden) return;
-  const panelStyles = getComputedStyle(elements.headValuePanel);
+function updateModelPanelWorkspaceHeight() {
+  const panel = [elements.headValuePanel, elements.headPolicyPanel]
+    .find((candidate) => !candidate.hidden);
+  if (!panel) return;
+  const panelStyles = getComputedStyle(panel);
   const panelSpace =
-    elements.headValuePanel.getBoundingClientRect().height +
+    panel.getBoundingClientRect().height +
     Number.parseFloat(panelStyles.marginTop || "0");
   elements.workspace.style.setProperty(
     "--head-value-panel-space",
@@ -154,8 +168,9 @@ function updateHeadValueWorkspaceHeight() {
 }
 
 
-const headValueResizeObserver = new ResizeObserver(updateHeadValueWorkspaceHeight);
+const headValueResizeObserver = new ResizeObserver(updateModelPanelWorkspaceHeight);
 headValueResizeObserver.observe(elements.headValuePanel);
+headValueResizeObserver.observe(elements.headPolicyPanel);
 
 
 function playerName(player) {
@@ -673,6 +688,13 @@ function cancelHeadValuePrediction() {
 }
 
 
+function cancelHeadPolicyPrediction() {
+  view.headPolicyRequestNumber += 1;
+  view.headPolicyController?.abort();
+  view.headPolicyController = null;
+}
+
+
 function resetHeadValuePanel(message) {
   elements.headValuePanel.classList.remove(
     "is-loading",
@@ -791,6 +813,131 @@ async function requestHeadValue(cell) {
 }
 
 
+function resetHeadPolicyPanel(message) {
+  view.headPolicyPrediction = null;
+  boardRenderer.setHeadPolicy(null);
+  elements.headPolicyPanel.classList.remove("is-loading", "is-error");
+  elements.headPolicyTitle.textContent = "Current position";
+  elements.headPolicyMessage.textContent = message ||
+    "Open a saved frame to predict probabilities for all legal moves.";
+  for (const result of [
+    elements.headPolicySelected,
+    elements.headPolicySelectedPrior,
+    elements.headPolicyTopMove,
+    elements.headPolicyTopPrior,
+  ]) {
+    result.textContent = "—";
+  }
+}
+
+
+function showHeadPolicyError(message) {
+  resetHeadPolicyPanel(message);
+  elements.headPolicyPanel.classList.add("is-error");
+  elements.headPolicyTitle.textContent = "Policy unavailable";
+}
+
+
+function displayHeadPolicySelection(cell) {
+  const prediction = view.headPolicyPrediction;
+  if (!prediction || !cell) return;
+  const [row, col] = cell;
+  const probability = prediction.policy?.[row]?.[col];
+  elements.headPolicySelected.textContent = formatCoordinate(cell);
+  elements.headPolicySelectedPrior.textContent = Number.isFinite(probability)
+    ? `${(probability * 100).toFixed(2)}%`
+    : "—";
+}
+
+
+function displayHeadPolicyPrediction(prediction) {
+  view.headPolicyPrediction = prediction;
+  boardRenderer.setHeadPolicy(prediction.policy);
+  elements.headPolicyPanel.classList.remove("is-loading", "is-error");
+  elements.headPolicyTitle.textContent =
+    `Before move ${prediction.move_number} for ${playerName(prediction.player)}`;
+  elements.headPolicyModel.textContent = prediction.model;
+  elements.headPolicyModel.title = prediction.model;
+  elements.headPolicyMessage.textContent =
+    "Probabilities are normalized over legal moves in the current position.";
+
+  const topMove = prediction.top_moves?.[0];
+  elements.headPolicyTopMove.textContent = topMove
+    ? formatCoordinate(topMove.coordinate)
+    : "—";
+  elements.headPolicyTopPrior.textContent = topMove
+    ? `${(topMove.probability * 100).toFixed(2)}%`
+    : "—";
+  displayHeadPolicySelection(view.selectedCell);
+}
+
+
+async function requestHeadPolicy() {
+  if (!view.analysis || !view.frame || view.displayingExperiment) return;
+
+  const frameIndex = view.frameIndex;
+  const cacheKey = `${view.analysis.analysis_id}:${frameIndex}`;
+  const startedAt = performance.now();
+  const isCached = view.headPolicyCache.has(cacheKey);
+  cancelHeadPolicyPrediction();
+  const requestNumber = view.headPolicyRequestNumber;
+
+  resetHeadPolicyPanel();
+  elements.headPolicyPanel.classList.add("is-loading");
+  elements.headPolicyTitle.textContent = `Predicting move ${frameIndex + 1}…`;
+  elements.headPolicyMessage.textContent = "Running the local policy-head model.";
+  elements.headPolicyTopPrior.textContent = "•••";
+
+  logDiagnostic(
+    `${isCached ? "policy cache lookup" : "predict policy"} · frame ${frameIndex + 1}`,
+    { source: "MODEL" },
+  );
+
+  try {
+    let prediction = view.headPolicyCache.get(cacheKey);
+    if (!prediction) {
+      view.headPolicyController = new AbortController();
+      const response = await fetch(
+        `/api/analyses/${view.analysis.analysis_id}/frames/${frameIndex}/head-policy`,
+        { cache: "no-store", signal: view.headPolicyController.signal },
+      );
+      const payload = await responsePayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.detail || "The policy-head prediction failed.");
+      }
+      prediction = payload;
+      view.headPolicyCache.set(cacheKey, prediction);
+    }
+
+    if (requestNumber !== view.headPolicyRequestNumber) return;
+    view.headPolicyController = null;
+    displayHeadPolicyPrediction(prediction);
+    const roundTripMs = performance.now() - startedAt;
+    const topMove = prediction.top_moves?.[0];
+    const timing = isCached
+      ? "cache hit"
+      : Number.isFinite(prediction.elapsed_ms)
+        ? `${prediction.elapsed_ms.toFixed(1)} ms server · ${roundTripMs.toFixed(1)} ms round trip`
+        : `${roundTripMs.toFixed(1)} ms round trip`;
+    logDiagnostic(
+      `${prediction.model} · top ${formatCoordinate(topMove?.coordinate)} ` +
+        `${topMove ? `${(topMove.probability * 100).toFixed(2)}%` : "—"} · ${timing}`,
+      { level: "success", source: "MODEL" },
+    );
+  } catch (error) {
+    if (error.name === "AbortError" || requestNumber !== view.headPolicyRequestNumber) {
+      return;
+    }
+    view.headPolicyController = null;
+    showHeadPolicyError(error.message || "The policy-head prediction failed.");
+    logDiagnostic(
+      error.message || "The policy-head prediction failed.",
+      { level: "error", source: "MODEL" },
+    );
+  }
+}
+
+
 async function importGame(file) {
   if (view.importing) return;
 
@@ -842,6 +989,9 @@ async function importGame(file) {
     cancelHeadValuePrediction();
     view.headValueCache.clear();
     resetHeadValuePanel();
+    cancelHeadPolicyPrediction();
+    view.headPolicyCache.clear();
+    resetHeadPolicyPanel();
     updateExperimentControls();
 
     updateGameOverview();
@@ -1042,7 +1192,9 @@ async function selectOriginalFrame(
     Math.min(requestedIndex, view.analysis.frame_count - 1),
   );
   cancelHeadValuePrediction();
+  cancelHeadPolicyPrediction();
   if (view.overlay === "head-value") resetHeadValuePanel();
+  if (view.overlay === "head-policy") resetHeadPolicyPanel();
   const requestNumber = ++view.requestNumber;
   view.frameIndex = frameIndex;
   view.originalFrameIndex = frameIndex;
@@ -1103,9 +1255,15 @@ function selectReplayFrame(
   const frame = frames[frameIndex];
   view.requestNumber += 1;
   cancelHeadValuePrediction();
+  cancelHeadPolicyPrediction();
   if (view.overlay === "head-value") {
     resetHeadValuePanel(
       "Value-head requests are available on saved frames, not forced replay frames.",
+    );
+  }
+  if (view.overlay === "head-policy") {
+    showHeadPolicyError(
+      "Policy-head requests are available on saved frames, not forced replay frames.",
     );
   }
   view.frameIndex = frameIndex;
@@ -1198,6 +1356,15 @@ function updateFrameDisplay() {
   boardRenderer.setFrame(frame);
   boardRenderer.setOverlay(view.overlay);
   selectBoardCell(view.selectedCell, false);
+  if (view.overlay === "head-policy") {
+    if (isExperiment) {
+      showHeadPolicyError(
+        "Policy-head requests are available on saved frames, not forced replay frames.",
+      );
+    } else {
+      requestHeadPolicy();
+    }
+  }
   updateScreenshotAvailability();
   updateExperimentControls();
 }
@@ -1243,6 +1410,10 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
     ? `${(policy * 100).toFixed(2)}%`
     : "—";
   boardRenderer.setSelectedCell(cell);
+
+  if (view.overlay === "head-policy") {
+    displayHeadPolicySelection(cell);
+  }
 
   if (view.overlay === "head-value" && runHeadValuePrediction) {
     if (view.displayingExperiment) {
@@ -1423,6 +1594,7 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
   }
   const descriptions = {
     "head-value": "Click a legal position · prediction appears below",
+    "head-policy": "Neural move probabilities · legal moves only",
     value: "Mean result · player-to-move perspective",
     "raw-q": "Win/loss balance · player-to-move perspective",
     visits: "Completed visits · brighter means more visits",
@@ -1430,15 +1602,18 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
     none: "Board and placed dots · search overlays hidden",
   };
   const isHeadValue = view.overlay === "head-value";
-  const isSequential = view.overlay === "visits" || view.overlay === "policy";
+  const isHeadPolicy = view.overlay === "head-policy";
+  const isSequential = ["visits", "policy", "head-policy"].includes(view.overlay);
   elements.overlayDescription.textContent = descriptions[view.overlay];
   elements.overlayScale.hidden = view.overlay === "none" || isHeadValue;
   elements.overlayScale.classList.toggle("is-sequential", isSequential);
   elements.scaleLow.textContent = isSequential ? "Low" : "Negative";
   elements.scaleHigh.textContent = isSequential ? "High" : "Positive";
   elements.headValuePanel.hidden = !isHeadValue;
-  if (isHeadValue) updateHeadValueWorkspaceHeight();
+  elements.headPolicyPanel.hidden = !isHeadPolicy;
+  if (isHeadValue || isHeadPolicy) updateModelPanelWorkspaceHeight();
   cancelHeadValuePrediction();
+  cancelHeadPolicyPrediction();
   if (isHeadValue) {
     resetHeadValuePanel(
       view.frame
@@ -1447,6 +1622,17 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
     );
   }
   boardRenderer.setOverlay(view.overlay);
+  if (isHeadPolicy) {
+    if (!view.frame) {
+      resetHeadPolicyPanel("Open a saved 10 × 10 game to predict its policy.");
+    } else if (view.displayingExperiment) {
+      showHeadPolicyError(
+        "Policy-head requests are available on saved frames, not forced replay frames.",
+      );
+    } else {
+      requestHeadPolicy();
+    }
+  }
 });
 
 

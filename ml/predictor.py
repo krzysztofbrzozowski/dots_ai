@@ -1,4 +1,4 @@
-"""Value-head inference shared by the command-line example and analysis GUI."""
+"""Dual-head inference shared by the command-line example and analysis GUI."""
 
 from pathlib import Path
 from threading import Lock
@@ -17,7 +17,7 @@ MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "10x10_083769_residual.keras"
+    / "10x10_083769_dual_head_v1.keras"
 )
 # --- END PATHS AND SETTINGS
 
@@ -27,8 +27,12 @@ from game.enclosure import DotsGame
 from game.groups import rebuild_groups
 
 
-class ValueHeadUnavailableError(RuntimeError):
-    """The configured value-head model could not be loaded."""
+class DualHeadUnavailableError(RuntimeError):
+    """The configured dual-head model could not be loaded."""
+
+
+# Keep the old public name working for code that only uses the value endpoint.
+ValueHeadUnavailableError = DualHeadUnavailableError
 
 
 # --- START MODEL INPUT PREPARATION
@@ -88,7 +92,7 @@ def analysis_frame_to_game_state(saved_game, frame_index):
 # --- END MODEL INPUT PREPARATION
 
 
-# --- START VALUE-HEAD PREDICTION
+# --- START DUAL-HEAD PREDICTION
 def _validate_model_inputs(model, model_input):
     """Fail with a useful message when a checkpoint has a different schema."""
     input_shapes = model.input_shape
@@ -108,13 +112,39 @@ def _validate_model_inputs(model, model_input):
         raise ValueError(f"Model expects {expected_shapes}, got {actual_shapes}")
 
 
-def predict_game_state(model, state):
-    """Predict loss/draw/win probabilities for the player whose turn it is."""
+def _named_model_output(model, predictions, output_name):
+    """Return one named output from either dict- or list-style Keras results."""
+    if isinstance(predictions, dict):
+        if output_name not in predictions:
+            raise ValueError(f"Model does not provide a {output_name!r} output")
+        return predictions[output_name]
+
+    if isinstance(predictions, (tuple, list)):
+        output_names = list(getattr(model, "output_names", ()))
+        if output_name not in output_names:
+            raise ValueError(f"Model does not provide a {output_name!r} output")
+        return predictions[output_names.index(output_name)]
+
+    # A single tensor is accepted only for the legacy value-only test model.
+    if output_name == "value":
+        return predictions
+    raise ValueError(f"Model does not provide a {output_name!r} output")
+
+
+def _predict_outputs(model, state):
+    """Validate and run one model inference for a game state."""
     model_input = game_state_to_model_input(state)
     _validate_model_inputs(model, model_input)
+    return model.predict(model_input, verbose=0)
+
+
+def _value_result(model, predictions):
+    """Convert the named value output into loss/draw/win fields."""
+    probabilities = np.asarray(
+        _named_model_output(model, predictions, "value")
+    )[0]
 
     # Training labels are 0=loss, 1=draw, and 2=win for the player to move.
-    probabilities = np.asarray(model.predict(model_input, verbose=0)[0])
     if probabilities.shape != (3,) or not np.all(np.isfinite(probabilities)):
         raise ValueError("Model must return three finite loss/draw/win probabilities")
 
@@ -124,6 +154,57 @@ def predict_game_state(model, state):
         "draw": draw,
         "win": win,
         "value": win - loss,
+        "source": "model",
+    }
+
+
+def predict_game_state(model, state):
+    """Predict loss/draw/win probabilities for the player whose turn it is."""
+    return _value_result(model, _predict_outputs(model, state))
+
+
+def predict_policy(model, state):
+    """Return a legal-move probability map for the current position.
+
+    The network produces one raw logit per board cell. Illegal cells are
+    excluded before a numerically stable softmax, so the returned legal
+    probabilities sum to one and every illegal cell is exactly zero.
+    """
+    predictions = _predict_outputs(model, state)
+    logits = np.asarray(
+        _named_model_output(model, predictions, "policy")
+    )[0]
+    action_count = state.board.size
+    if logits.shape != (action_count,) or not np.all(np.isfinite(logits)):
+        raise ValueError(
+            f"Model must return {action_count} finite policy logits"
+        )
+
+    legal_mask = ((state.board == 0) & (state.territory == 0)).reshape(-1)
+    if not np.any(legal_mask):
+        raise ValueError("Cannot predict policy for a position without legal moves")
+
+    legal_logits = logits[legal_mask]
+    legal_exponentials = np.exp(legal_logits - np.max(legal_logits))
+    probabilities = np.zeros(action_count, dtype=np.float32)
+    probabilities[legal_mask] = legal_exponentials / legal_exponentials.sum()
+    policy_map = probabilities.reshape(state.board.shape)
+
+    top_indices = np.flatnonzero(legal_mask)
+    top_indices = top_indices[np.argsort(probabilities[top_indices])[::-1]][:5]
+    top_moves = []
+    for flat_index in top_indices:
+        row, col = np.unravel_index(flat_index, state.board.shape)
+        top_moves.append(
+            {
+                "coordinate": [int(row), int(col)],
+                "probability": float(probabilities[flat_index]),
+            }
+        )
+
+    return {
+        "policy": policy_map.tolist(),
+        "top_moves": top_moves,
         "source": "model",
     }
 
@@ -159,7 +240,7 @@ def predict_move(model, state, move):
     }
 
 
-class ValueHeadPredictor:
+class DualHeadPredictor:
     """Load one Keras checkpoint lazily and reuse it across GUI requests."""
 
     def __init__(self, model_path=MODEL_PATH, model_loader=None):
@@ -181,8 +262,8 @@ class ValueHeadPredictor:
             if self._model is not None:
                 return self._model
             if not self.model_path.is_file():
-                raise ValueHeadUnavailableError(
-                    f"Value-head model was not found: {self.model_path}"
+                raise DualHeadUnavailableError(
+                    f"Dual-head model was not found: {self.model_path}"
                 )
 
             try:
@@ -194,8 +275,8 @@ class ValueHeadPredictor:
                     model_loader = self._model_loader
                 self._model = model_loader(self.model_path, compile=False)
             except Exception as error:
-                raise ValueHeadUnavailableError(
-                    f"Could not load value-head model {self.model_name}: {error}"
+                raise DualHeadUnavailableError(
+                    f"Could not load dual-head model {self.model_name}: {error}"
                 ) from error
 
         return self._model
@@ -215,13 +296,32 @@ class ValueHeadPredictor:
             "player": int(state.next_to_move),
             "model": self.model_name,
         }
-# --- END VALUE-HEAD PREDICTION
+
+    def predict_analysis_policy(self, saved_game, frame_index):
+        """Predict the complete policy map for one saved analysis frame."""
+        state = analysis_frame_to_game_state(saved_game, frame_index)
+        return self.predict_state_policy(state)
+
+    def predict_state_policy(self, state):
+        """Predict policy from an already constructed game state."""
+        with self._prediction_lock:
+            prediction = predict_policy(self._load_model(), state)
+        return {
+            **prediction,
+            "player": int(state.next_to_move),
+            "model": self.model_name,
+        }
+# --- END DUAL-HEAD PREDICTION
+
+
+# Preserve the previous class name for callers that only request head value.
+ValueHeadPredictor = DualHeadPredictor
 
 
 # --- START MANUAL EXAMPLE
 def main():
     """Run one small prediction example from the command line."""
-    predictor = ValueHeadPredictor()
+    predictor = DualHeadPredictor()
 
     # Build the position before the candidate move with zero-based coordinates.
     state = DotsGame(10, 10)

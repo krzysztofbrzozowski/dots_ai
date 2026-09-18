@@ -42,20 +42,28 @@ the board first on narrow screens.
 Keyboard focus is visible, and timeline transitions respect reduced-motion
 preferences. Theme colors are centralized in `GUI/analysis/analysis.css`.
 
-The center board renders the state before the selected move. Five board modes
+The center board renders the state before the selected move. Seven board modes
 are available:
 
 - **Head value** — click a legal move to evaluate the position after that move
-  with `10x10_083769_3conv_d4_normalized.keras`;
+  with `10x10_083769_dual_head_v1.keras`;
+- **Policy head** — show the dual-head model's probability for every legal move
+  in the current position;
 - **Q / N** — the mean rollout result from the current player's perspective;
 - **Raw Q** — the saved child win/loss balance;
 - **Visits** — the raw child visit count;
-- **Policy** — the visit share among root children.
+- **Policy** — the visit share among root children;
+- **None** — the board position without a search or model overlay.
 
 Head value results appear below the board as loss, draw, and win probabilities,
 plus `P(win) - P(loss)`. All four values use the perspective of the player making
 the candidate move. The model is loaded on the first prediction and then reused.
 Its current checkpoint accepts 10 × 10 positions.
+
+Policy head probabilities are produced with one model inference for the current
+frame. Illegal cells are removed before softmax, so their displayed probability
+is zero and the legal probabilities sum to one. This neural policy is separate
+from the saved MCTS **Policy** overlay derived from visit counts.
 
 The bright outer ring identifies the action chosen by MCTS. A small empty ring
 identifies a legal action with no completed visit. This distinction matters
@@ -119,6 +127,10 @@ frame as a playable game state, applies the clicked move, and sends the resultin
 position through `ml/predictor.py`. The response uses the moving player's
 perspective even though the model evaluates the opponent's next turn.
 
+For a Policy head request, the server evaluates the pre-move frame directly,
+masks illegal cells, and normalizes the remaining policy logits. No candidate
+move is applied and MCTS is not invoked.
+
 Schema-specific NPZ names stop at the adapter. The service and browser consume
 the canonical `AnalysisGame`, so a future schema can add another adapter
 without teaching the GUI a second storage layout.
@@ -141,6 +153,7 @@ terminal board with the current game engine.
 | `GET /api/analyses/{id}` | Read game metadata and timeline descriptors |
 | `GET /api/analyses/{id}/frames/{index}` | Read one canonical decision frame |
 | `GET /api/analyses/{id}/frames/{index}/head-value?row={row}&col={col}` | Predict a legal candidate move with the configured value head |
+| `GET /api/analyses/{id}/frames/{index}/head-policy` | Predict a normalized probability map over legal actions |
 | `GET /api/diagnostics?after={event_id}` | Read newer `PRINT_T` diagnostic events |
 | `DELETE /api/analyses/{id}` | Release the in-memory session |
 | `GET /api/health` | Check whether the analyzer is ready |

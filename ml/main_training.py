@@ -69,11 +69,11 @@ train_dataset = batched_array_dataset(
 # board representations. The policy map is transformed by the exact same
 # symmetry as the board; the value target and scalar scores stay unchanged.
 # TODO Skip augumentation for now
-# augmented_train_dataset = train_dataset.map(
-#     random_dual_head_d4_augmentation,
-#     num_parallel_calls=tf.data.AUTOTUNE,
-# ).prefetch(tf.data.AUTOTUNE)
-training_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
+augmented_train_dataset = train_dataset.map(
+    random_dual_head_d4_augmentation,
+    num_parallel_calls=tf.data.AUTOTUNE,
+).prefetch(tf.data.AUTOTUNE)
+# training_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
 
 validation_dataset = batched_array_dataset(
     validation_inputs,
@@ -186,9 +186,9 @@ model.compile(
 MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
 history = model.fit(
-    # augmented_train_dataset,
+    augmented_train_dataset,
     #TODO: for now not using augumented dataset
-    training_dataset,
+    # training_dataset,
     epochs=EPOCHS,
     # The generator already reshuffles training indices at every epoch.
     shuffle=False,
