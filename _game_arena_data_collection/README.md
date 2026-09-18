@@ -116,9 +116,10 @@ fills missing local indexes before allocating new ones.
 
 The coordinator exclusively updates metadata, while workers atomically save
 separate NPZ files. An OS lock prevents two collector processes from writing
-to the same directory at the same time. Parallel collection on separate
-computers uses separate local directories; the completed files can be merged
-afterward.
+to the same directory at the same time. The lock uses `fcntl` on macOS/Linux
+and the built-in `msvcrt` module on Windows; no additional package is needed.
+Parallel collection on separate computers uses separate local directories;
+the completed files can be merged afterward.
 
 ## Files and verification
 

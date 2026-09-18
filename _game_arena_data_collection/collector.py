@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import replace
 from datetime import datetime, timezone
-import fcntl
 import hashlib
 import json
 import math
@@ -19,6 +18,11 @@ import time
 from time import monotonic
 
 import numpy as np
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 from game.enclosure import DotsGame
 from mcts.enclosure import MonteCarloTreeSearch
@@ -168,15 +172,29 @@ def write_json(path, data):
 @contextmanager
 def collection_lock(directory):
     # OS releases the lock on exit or crash. The harmless file can remain.
-    with (directory / ".collector.lock").open("a") as stream:
+    # Windows msvcrt locks a byte range, so the lock file must contain one byte.
+    with (directory / ".collector.lock").open("a+b") as stream:
+        if os.name == "nt":
+            stream.seek(0, os.SEEK_END)
+            if stream.tell() == 0:
+                stream.write(b"\0")
+                stream.flush()
+            stream.seek(0)
         try:
-            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
+            if os.name == "nt":
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
             raise RuntimeError("another collector is writing to this directory") from error
         try:
             yield
         finally:
-            fcntl.flock(stream, fcntl.LOCK_UN)
+            if os.name == "nt":
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream, fcntl.LOCK_UN)
 
 
 def game_identity(path):
