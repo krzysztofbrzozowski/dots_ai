@@ -190,6 +190,37 @@ def test_virtual_loss_spreads_a_batch_across_equivalent_children():
     assert sorted(child.n for child in root.children) == [2, 2]
 
 
+def test_search_can_override_tree_policy_c_param_without_changing_final_selection():
+    calls = []
+    original_best_child = TwoPlayerMCTSNode.best_child
+
+    def recording_best_child(node, c_param=1.4):
+        calls.append(c_param)
+        return original_best_child(node, c_param=c_param)
+
+    with patch.object(TwoPlayerMCTSNode, "best_child", recording_best_child):
+        MonteCarloTreeSearch(
+            TwoPlayerMCTSNode(DotsGame(1, 2)),
+            c_param=0.6,
+        ).best_action(simulations_number=4)
+
+    assert 0.6 in calls
+    assert calls[-1] == 0.0
+
+
+def test_search_rejects_invalid_c_param_overrides():
+    for value in (-0.1, float("nan"), float("inf"), True, "0.2"):
+        try:
+            MonteCarloTreeSearch(
+                TwoPlayerMCTSNode(DotsGame(1, 1)),
+                c_param=value,
+            )
+        except ValueError as error:
+            assert "c_param" in str(error)
+        else:
+            raise AssertionError(f"invalid c_param {value!r} was accepted")
+
+
 def test_parallel_search_releases_reservations_after_worker_failure():
     executor = ImmediateExecutor(fail_on_submission=2)
     root = TwoPlayerMCTSNode(DotsGame(2, 2))

@@ -1,5 +1,6 @@
 """Monte Carlo tree search with optional process-backed leaf rollouts"""
 
+import math
 import random
 import time
 from dataclasses import dataclass
@@ -40,6 +41,7 @@ class MonteCarloTreeSearch:
         rollout_executor=None,
         rollout_batch_size=1,
         random_seed=None,
+        c_param=None,
     ):
         if isinstance(rollout_batch_size, bool) or not isinstance(
             rollout_batch_size, int
@@ -49,11 +51,22 @@ class MonteCarloTreeSearch:
             raise ValueError("rollout_batch_size must be positive")
         if rollout_executor is None and rollout_batch_size != 1:
             raise ValueError("rollout_batch_size requires a rollout executor")
+        if c_param is not None:
+            if (
+                isinstance(c_param, bool)
+                or not isinstance(c_param, (int, float))
+                or not math.isfinite(c_param)
+                or c_param < 0
+            ):
+                raise ValueError("c_param must be finite and non-negative or None")
 
         self.root = node
         self.rollout_executor = rollout_executor
         self.rollout_batch_size = rollout_batch_size
         self._seed_source = random.Random(random_seed)
+        # None preserves the node's existing default. Experiments can override
+        # exploration per search without mutating the shared MCTS node code.
+        self.c_param = None if c_param is None else float(c_param)
         self.last_search_stats = None
 
     def best_action(self, simulations_number=None, total_simulation_seconds=None):
@@ -202,6 +215,9 @@ class MonteCarloTreeSearch:
         while not current_node.is_terminal_node():
             if not current_node.is_fully_expanded():
                 return current_node.expand()
-            current_node = current_node.best_child()
+            if self.c_param is None:
+                current_node = current_node.best_child()
+            else:
+                current_node = current_node.best_child(c_param=self.c_param)
 
         return current_node

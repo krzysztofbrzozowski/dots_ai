@@ -104,6 +104,7 @@ class SelfPlayTrajectory:
         final_result,
         *,
         filename_suffix=None,
+        board_size_subdirectory=True,
     ):
         """Atomically write this completed trajectory and return its path."""
         if not self._boards:
@@ -121,9 +122,13 @@ class SelfPlayTrajectory:
             raise ValueError(
                 "filename_suffix may contain only letters, digits, '-' and '_'"
             )
+        if not isinstance(board_size_subdirectory, bool):
+            raise TypeError("board_size_subdirectory must be a boolean")
 
         rows, cols = self._board_shape
-        size_directory = Path(output_directory) / f"{rows}x{cols}"
+        size_directory = Path(output_directory)
+        if board_size_subdirectory:
+            size_directory /= f"{rows}x{cols}"
         size_directory.mkdir(parents=True, exist_ok=True)
 
         game_id = uuid.uuid4().hex
