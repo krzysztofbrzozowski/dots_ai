@@ -17,7 +17,7 @@ MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "10x10_083769_dual_head_v1.keras"
+    / "25x25_088622_human_sgf_dual_head_v1.keras"
 )
 # --- END PATHS AND SETTINGS
 

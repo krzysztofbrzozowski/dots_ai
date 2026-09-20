@@ -1,12 +1,15 @@
-"""Tests for exact square-board augmentation and batched array input."""
+"""Tests for model inputs, policy targets, and batched training data."""
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
 import numpy as np
 import tensorflow as tf
 
 from game.enclosure import DotsGame
-from ml.data_loader import game_to_samples
+from ml.data_loader import game_to_samples, policy_targets_for_game
+from ml.model import build_dual_head_model
 from ml.predictor import (
     analysis_frame_to_game_state,
     game_state_to_model_input,
@@ -17,7 +20,38 @@ from ml.training_pipeline import (
     batched_array_dataset,
     d4_symmetries,
     random_d4_augmentation,
+    streaming_dual_head_npz_dataset,
 )
+
+
+def _policy_game(data_source, *, frame_count=2):
+    return {
+        "legal_masks": np.ones((frame_count, 2, 2), dtype=np.uint8),
+        "selected_actions": np.asarray(
+            [[0, 1], [1, 0]][:frame_count],
+            dtype=np.int16,
+        ),
+        "data_source": np.asarray(data_source),
+    }
+
+
+def _write_human_game(path, actions):
+    frame_count = len(actions)
+    np.savez_compressed(
+        path,
+        boards=np.zeros((frame_count, 2, 2), dtype=np.int8),
+        territories=np.zeros((frame_count, 2, 2), dtype=np.int8),
+        next_players=np.resize(
+            np.asarray([1, -1], dtype=np.int8),
+            frame_count,
+        ),
+        scores=np.zeros((frame_count, 2), dtype=np.int32),
+        legal_masks=np.ones((frame_count, 2, 2), dtype=np.uint8),
+        selected_actions=np.asarray(actions, dtype=np.int16),
+        final_result=np.asarray(1, dtype=np.int8),
+        data_source=np.asarray("human_sgf"),
+        has_mcts_policy=np.asarray(False),
+    )
 
 
 def test_training_and_prediction_use_matching_board_and_scalar_score_inputs():
@@ -41,6 +75,83 @@ def test_training_and_prediction_use_matching_board_and_scalar_score_inputs():
     prediction_board, prediction_scores = game_state_to_model_input(state)
     assert prediction_board.shape == (1, 2, 2, 5)
     np.testing.assert_allclose(prediction_scores, [[0.5, 0.25]])
+
+
+def test_human_policy_uses_selected_actions_as_weighted_one_hot_targets():
+    game = _policy_game("human_sgf")
+
+    targets, weights = policy_targets_for_game(game, (2, 2))
+
+    np.testing.assert_array_equal(
+        targets,
+        [[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]],
+    )
+    np.testing.assert_array_equal(weights, [1.0, 1.0])
+
+
+def test_mcts_policy_normalizes_legal_visits_and_ignores_empty_searches():
+    game = _policy_game("self_play")
+    game["visit_counts"] = np.asarray(
+        [[[1, 3], [100, 0]], [[0, 0], [0, 0]]],
+        dtype=np.int64,
+    )
+    game["legal_masks"][0, 1, 0] = 0
+
+    targets, weights = policy_targets_for_game(game, (2, 2))
+
+    np.testing.assert_allclose(targets[0], [0.25, 0.75, 0.0, 0.0])
+    np.testing.assert_array_equal(targets[1], np.zeros(4))
+    np.testing.assert_array_equal(weights, [1.0, 0.0])
+
+
+def test_policy_without_human_action_or_mcts_visits_has_zero_weight():
+    game = _policy_game("random_opening")
+
+    targets, weights = policy_targets_for_game(game, (2, 2))
+
+    np.testing.assert_array_equal(targets, np.zeros((2, 4)))
+    np.testing.assert_array_equal(weights, np.zeros(2))
+
+
+def test_streaming_dataset_loads_games_concurrently_and_batches_positions():
+    with TemporaryDirectory() as directory:
+        directory = Path(directory)
+        first_path = directory / "first.npz"
+        second_path = directory / "second.npz"
+        _write_human_game(first_path, [[0, 0], [0, 1]])
+        _write_human_game(second_path, [[1, 0], [1, 1], [0, 0]])
+
+        dataset = streaming_dual_head_npz_dataset(
+            [first_path, second_path],
+            board_shape=(2, 2),
+            batch_size=3,
+            file_workers=2,
+        )
+        batches = list(dataset.as_numpy_iterator())
+
+    assert [len(inputs[0]) for inputs, _, _ in batches] == [3, 2]
+    assert sum(len(inputs[0]) for inputs, _, _ in batches) == 5
+    for inputs, targets, weights in batches:
+        assert inputs[0].shape[1:] == (2, 2, 5)
+        assert inputs[1].shape[1:] == (2,)
+        assert targets["policy"].shape[1:] == (4,)
+        np.testing.assert_allclose(targets["policy"].sum(axis=1), 1.0)
+        np.testing.assert_array_equal(weights["policy"], 1.0)
+        np.testing.assert_array_equal(weights["value"], 1.0)
+
+
+def test_existing_dual_head_architecture_adapts_to_25x25():
+    model = build_dual_head_model((25, 25))
+    outputs = model(
+        (
+            tf.zeros((1, 25, 25, 5), dtype=tf.float32),
+            tf.zeros((1, 2), dtype=tf.float32),
+        ),
+        training=False,
+    )
+
+    assert outputs["policy"].shape == (1, 625)
+    assert outputs["value"].shape == (1, 3)
 
 
 def test_candidate_prediction_is_returned_for_the_player_making_the_move():

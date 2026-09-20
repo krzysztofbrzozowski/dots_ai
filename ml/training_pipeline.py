@@ -1,9 +1,14 @@
 """TensorFlow input-pipeline helpers for value and policy/value training."""
 
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+import itertools
 import math
+from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
+
+from ml.data_loader import load_dual_head_game_samples
 
 
 def batched_array_dataset(
@@ -97,6 +102,126 @@ def batched_array_dataset(
     )
     batch_count = math.ceil(number_of_samples / batch_size)
     return dataset.apply(tf.data.experimental.assert_cardinality(batch_count))
+
+
+def _parallel_game_samples(paths, worker_count):
+    """Load a bounded number of game files concurrently."""
+
+    if worker_count == 1:
+        for path in paths:
+            yield load_dual_head_game_samples(path)
+        return
+
+    path_iterator = iter(paths)
+    maximum_pending = worker_count * 2
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        pending = {}
+
+        def submit_next():
+            try:
+                path = next(path_iterator)
+            except StopIteration:
+                return False
+            future = executor.submit(load_dual_head_game_samples, path)
+            pending[future] = path
+            return True
+
+        for _ in range(maximum_pending):
+            if not submit_next():
+                break
+
+        while pending:
+            completed, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in completed:
+                pending.pop(future)
+                result = future.result()
+                submit_next()
+                yield result
+
+
+def streaming_dual_head_npz_dataset(
+    game_paths,
+    board_shape,
+    batch_size,
+    *,
+    shuffle=False,
+    seed=None,
+    shuffle_buffer_size=16_384,
+    file_workers=4,
+):
+    """Stream complete NPZ games into shuffled, position-level batches.
+
+    Only a bounded number of games and shuffled positions are resident in
+    memory. Every NPZ is opened once per dataset iteration, and several files
+    can be decoded concurrently while TensorFlow consumes previous positions.
+    """
+
+    paths = tuple(Path(path) for path in game_paths)
+    if not paths:
+        raise ValueError("game_paths cannot be empty")
+    board_shape = tuple(int(value) for value in board_shape)
+    if len(board_shape) != 2 or any(value <= 0 for value in board_shape):
+        raise ValueError("board_shape must contain two positive dimensions")
+    if (
+        not isinstance(batch_size, int)
+        or isinstance(batch_size, bool)
+        or batch_size <= 0
+    ):
+        raise ValueError("batch_size must be a positive integer")
+    if (
+        not isinstance(file_workers, int)
+        or isinstance(file_workers, bool)
+        or file_workers <= 0
+    ):
+        raise ValueError("file_workers must be a positive integer")
+    if shuffle and shuffle_buffer_size <= 0:
+        raise ValueError("shuffle_buffer_size must be positive when shuffling")
+
+    rows, columns = board_shape
+    action_count = rows * columns
+    generation = itertools.count()
+
+    def game_blocks():
+        ordered_paths = list(paths)
+        if shuffle:
+            generation_index = next(generation)
+            effective_seed = None if seed is None else seed + generation_index
+            np.random.default_rng(effective_seed).shuffle(ordered_paths)
+        yield from _parallel_game_samples(ordered_paths, file_workers)
+
+    game_signature = (
+        (
+            tf.TensorSpec(
+                shape=(None, rows, columns, 5),
+                dtype=tf.float32,
+            ),
+            tf.TensorSpec(shape=(None, 2), dtype=tf.float32),
+        ),
+        {
+            "policy": tf.TensorSpec(
+                shape=(None, action_count),
+                dtype=tf.float32,
+            ),
+            "value": tf.TensorSpec(shape=(None,), dtype=tf.int64),
+        },
+        {
+            "policy": tf.TensorSpec(shape=(None,), dtype=tf.float32),
+            "value": tf.TensorSpec(shape=(None,), dtype=tf.float32),
+        },
+    )
+    dataset = tf.data.Dataset.from_generator(
+        game_blocks,
+        output_signature=game_signature,
+    ).unbatch()
+    if shuffle:
+        dataset = dataset.shuffle(
+            shuffle_buffer_size,
+            seed=seed,
+            reshuffle_each_iteration=True,
+        )
+    return dataset.batch(batch_size, drop_remainder=False).prefetch(
+        tf.data.AUTOTUNE
+    )
 
 
 def d4_symmetries(samples):

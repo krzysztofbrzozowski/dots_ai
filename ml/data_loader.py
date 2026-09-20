@@ -7,6 +7,21 @@ import numpy as np
 from training import load_self_play_game
 
 
+STREAMING_REQUIRED_FIELDS = (
+    "boards",
+    "territories",
+    "next_players",
+    "scores",
+    "legal_masks",
+    "selected_actions",
+    "final_result",
+)
+STREAMING_OPTIONAL_FIELDS = (
+    "data_source",
+    "has_mcts_policy",
+)
+
+
 def game_to_samples(game):
     """Convert one loaded game into model inputs and sparse class labels."""
     # Copy loaded game (np arrays) object to local one
@@ -121,6 +136,30 @@ def load_game_samples(path):
     return game_to_samples(game)
 
 
+def load_streaming_game(path):
+    """Load only arrays needed for policy/value training from one NPZ."""
+
+    with np.load(path, allow_pickle=False) as stored:
+        missing = [
+            name for name in STREAMING_REQUIRED_FIELDS if name not in stored.files
+        ]
+        if missing:
+            raise ValueError(
+                f"{Path(path).name} is missing required training fields: "
+                f"{', '.join(missing)}"
+            )
+        game = {
+            name: stored[name].copy() for name in STREAMING_REQUIRED_FIELDS
+        }
+        for name in STREAMING_OPTIONAL_FIELDS:
+            if name in stored.files:
+                game[name] = stored[name].copy()
+        data_source = str(np.asarray(game.get("data_source", "")).item())
+        if data_source != "human_sgf" and "visit_counts" in stored.files:
+            game["visit_counts"] = stored["visit_counts"].copy()
+    return game
+
+
 def split_game_paths(directory, validation_fraction=0.2, seed=42, test_fraction=0.0):
     """Shuffle and split complete games without leaking positions between sets."""
     if not 0 < validation_fraction < 1:
@@ -187,12 +226,93 @@ def load_many_game_samples(paths):
     return (board_samples, score_features), labels
 
 
-def load_policy_targets(game_paths, expected_sample_count, board_shape):
-    """Return normalized MCTS visit targets and their per-position weights.
+def policy_targets_for_game(game, board_shape):
+    """Build one game's human one-hot or MCTS visit policy targets."""
 
-    A zero weight marks a position without MCTS visits, such as a random
-    opening. It can still train the value head without teaching policy an
-    artificial uniform distribution.
+    board_shape = tuple(int(value) for value in board_shape)
+    action_count = int(np.prod(board_shape))
+    legal_mask = np.asarray(game["legal_masks"], dtype=np.float32)
+    if legal_mask.ndim != 3 or legal_mask.shape[1:] != board_shape:
+        raise ValueError("policy board shape does not match value samples")
+
+    frame_count = len(legal_mask)
+    policy_targets = np.zeros(
+        (frame_count, action_count),
+        dtype=np.float32,
+    )
+    policy_weights = np.zeros(frame_count, dtype=np.float32)
+    data_source = str(np.asarray(game.get("data_source", "")).item())
+
+    if data_source == "human_sgf":
+        selected_actions = np.asarray(game["selected_actions"])
+        if selected_actions.shape != (frame_count, 2):
+            raise ValueError("human selected actions do not match policy samples")
+
+        rows = selected_actions[:, 0].astype(np.int64, copy=False)
+        columns = selected_actions[:, 1].astype(np.int64, copy=False)
+        if (
+            np.any(rows < 0)
+            or np.any(rows >= board_shape[0])
+            or np.any(columns < 0)
+            or np.any(columns >= board_shape[1])
+        ):
+            raise ValueError("human selected action is outside the board")
+
+        frame_indexes = np.arange(frame_count)
+        if not np.all(legal_mask[frame_indexes, rows, columns] == 1):
+            raise ValueError("human selected action must be legal")
+
+        flat_actions = rows * board_shape[1] + columns
+        policy_targets[frame_indexes, flat_actions] = 1.0
+        policy_weights.fill(1.0)
+        return policy_targets, policy_weights
+
+    visit_counts = game.get("visit_counts")
+    if visit_counts is None:
+        return policy_targets, policy_weights
+
+    visit_counts = np.asarray(visit_counts, dtype=np.float32)
+    if visit_counts.shape != legal_mask.shape:
+        raise ValueError("MCTS visit counts do not match policy samples")
+
+    legal_visits = visit_counts * legal_mask
+    visit_totals = legal_visits.sum(axis=(1, 2), keepdims=True)
+    valid_policy = visit_totals[:, 0, 0] > 0
+    normalized_visits = np.divide(
+        legal_visits,
+        visit_totals,
+        out=np.zeros_like(legal_visits),
+        where=visit_totals > 0,
+    )
+    policy_targets[:] = normalized_visits.reshape(-1, action_count)
+    policy_weights[:] = valid_policy.astype(np.float32)
+    return policy_targets, policy_weights
+
+
+def load_dual_head_game_samples(path):
+    """Load one NPZ as one game-sized dual-head training sample block."""
+
+    game = load_streaming_game(path)
+    inputs, value_labels = game_to_samples(game)
+    board_shape = inputs[0].shape[1:3]
+    policy_targets, policy_weights = policy_targets_for_game(game, board_shape)
+    targets = {
+        "policy": policy_targets,
+        "value": value_labels,
+    }
+    sample_weights = {
+        "policy": policy_weights,
+        "value": np.ones(len(value_labels), dtype=np.float32),
+    }
+    return inputs, targets, sample_weights
+
+
+def load_policy_targets(game_paths, expected_sample_count, board_shape):
+    """Return human one-hot or normalized MCTS policy targets and weights.
+
+    Human SGF positions use the selected action with weight one. Other games
+    use normalized legal MCTS visits. A zero weight marks a position without
+    either target, such as a random opening without search statistics.
     """
 
     action_count = int(np.prod(board_shape))
@@ -209,27 +329,14 @@ def load_policy_targets(game_paths, expected_sample_count, board_shape):
     offset = 0
 
     for path in game_paths:
-        game = load_self_play_game(path)
-        visit_counts = game["visit_counts"].astype(np.float32)
-        legal_mask = game["legal_masks"].astype(np.float32)
-        if visit_counts.shape[1:] != tuple(board_shape):
-            raise ValueError("policy board shape does not match value samples")
+        game = load_streaming_game(path)
+        game_targets, game_weights = policy_targets_for_game(game, board_shape)
 
-        legal_visits = visit_counts * legal_mask
-        visit_totals = legal_visits.sum(axis=(1, 2), keepdims=True)
-        valid_policy = visit_totals[:, 0, 0] > 0
-        normalized_visits = np.divide(
-            legal_visits,
-            visit_totals,
-            out=np.zeros_like(legal_visits),
-            where=visit_totals > 0,
-        )
-
-        stop = offset + len(normalized_visits)
+        stop = offset + len(game_targets)
         if stop > expected_sample_count:
             raise ValueError("policy samples do not match value samples")
-        policy_targets[offset:stop] = normalized_visits.reshape(-1, action_count)
-        policy_weights[offset:stop] = valid_policy.astype(np.float32)
+        policy_targets[offset:stop] = game_targets
+        policy_weights[offset:stop] = game_weights
         offset = stop
 
     if offset != expected_sample_count:

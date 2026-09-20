@@ -46,7 +46,7 @@ The center board renders the state before the selected move. Seven board modes
 are available:
 
 - **Head value** — click a legal move to evaluate the position after that move
-  with `10x10_083769_dual_head_v1.keras`;
+  with `25x25_088622_human_sgf_dual_head_v1.keras`;
 - **Policy head** — show the dual-head model's probability for every legal move
   in the current position;
 - **Q / N** — the mean rollout result from the current player's perspective;
@@ -58,7 +58,7 @@ are available:
 Head value results appear below the board as loss, draw, and win probabilities,
 plus `P(win) - P(loss)`. All four values use the perspective of the player making
 the candidate move. The model is loaded on the first prediction and then reused.
-Its current checkpoint accepts 10 × 10 positions.
+Its current checkpoint accepts 25 × 25 positions.
 
 Policy head probabilities are produced with one model inference for the current
 frame. Illegal cells are removed before softmax, so their displayed probability
