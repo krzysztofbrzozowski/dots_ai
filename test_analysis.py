@@ -99,13 +99,66 @@ def test_summary_and_frame_derive_search_statistics():
     assert summary["search"]["total_rollouts"] == 8
     assert abs(summary["search"]["average_rollouts_per_second"] - (8 / 0.75)) < 1e-9
     assert summary["timeline"][0]["selected_mean_value"] == 1.0
+    assert summary["timeline"][0]["selected_prior"] is None
+    assert summary["timeline"][0]["selected_visit_share"] == 0.5
     assert frame["selected_action"] == [0, 0]
+    assert frame["policy_priors"] is None
     assert frame["selected_action_statistics"]["raw_q"] == 2.0
     assert frame["selected_action_statistics"]["visits"] == 2
     assert frame["selected_action_statistics"]["mean_value"] == 1.0
     assert frame["selected_action_statistics"]["policy"] == 0.5
     assert frame["selected_action_statistics"]["value_rank"] == 1
     assert frame["rollouts_per_second"] == 8.0
+
+
+def test_optional_search_time_priors_are_exposed_separately_from_visit_share():
+    policy_priors = np.asarray(
+        [
+            [[0.4, 0.3], [0.2, 0.1]],
+            [[0.0, 0.5], [0.3, 0.2]],
+        ],
+        dtype=np.float32,
+    )
+    game = load_analysis_bytes(
+        make_schema_v1_npz(
+            policy_priors=policy_priors,
+            has_policy_priors=np.asarray((1, 1), dtype=np.uint8),
+        ),
+        "with-priors.npz",
+    )
+
+    summary = analysis_summary("session-priors", game)
+    frame = analysis_frame(game, 0)
+    selected = frame["selected_action_statistics"]
+
+    assert game.policy_priors.flags.writeable is False
+    assert np.allclose(frame["policy_priors"], policy_priors[0])
+    assert np.isclose(summary["timeline"][0]["selected_prior"], 0.4)
+    assert np.isclose(selected["prior"], 0.4)
+    assert selected["prior_rank"] == 1
+    assert selected["visit_share"] == 0.5
+    assert np.isclose(selected["policy_delta"], 0.1)
+    assert np.isclose(selected["policy_amplification"], 1.25)
+
+
+def test_loader_rejects_incomplete_optional_policy_prior_data():
+    policy_priors = np.asarray(
+        [
+            [[0.4, 0.3], [0.2, 0.1]],
+            [[0.0, 0.5], [0.3, 0.2]],
+        ],
+        dtype=np.float32,
+    )
+
+    try:
+        load_analysis_bytes(
+            make_schema_v1_npz(policy_priors=policy_priors),
+            "incomplete-priors.npz",
+        )
+    except AnalysisFileError as error:
+        assert "policy-prior data is incomplete" in str(error)
+    else:
+        raise AssertionError("incomplete optional policy-prior data was accepted")
 
 
 def test_loader_rejects_a_missing_required_field():
@@ -394,6 +447,11 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert 'id="screenshot-button"' in page.text
     assert 'data-overlay="head-value"' in page.text
     assert 'data-overlay="head-policy"' in page.text
+    assert "Prior P" in page.text
+    assert "MCTS π" in page.text
+    assert 'id="cell-prior"' in page.text
+    assert 'id="cell-visit-share"' in page.text
+    assert 'id="move-comparison-body"' in page.text
     assert 'data-overlay="none"' in page.text
     assert 'id="start-experiment"' in page.text
     assert 'id="step-experiment"' in page.text
@@ -406,6 +464,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert "importGame" in script.text
     assert "requestHeadValue" in script.text
     assert "requestHeadPolicy" in script.text
+    assert "renderMoveComparison" in script.text
     assert "logDiagnostic" in script.text
     assert "downloadSquareScreenshot" in script.text
     assert "startExperimentFromSelectedFrame" in script.text

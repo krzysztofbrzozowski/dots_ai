@@ -43,6 +43,8 @@ class SelfPlayTrajectory:
         self._scores = []
         self._q_values = []
         self._visit_counts = []
+        self._policy_priors = []
+        self._has_policy_priors = []
         self._legal_masks = []
         self._selected_actions = []
         self._completed_rollouts = []
@@ -79,9 +81,15 @@ class SelfPlayTrajectory:
         # Each position will show q, n
         q_values = np.zeros(shape, dtype=np.float32)
         visit_counts = np.zeros(shape, dtype=np.int64)
+        policy_priors = np.zeros(shape, dtype=np.float32)
+        has_policy_priors = bool(root.children) and all(
+            hasattr(child, "prior") for child in root.children
+        )
         for child in root.children:
             q_values[child.action] = child.q
             visit_counts[child.action] = int(child.n)
+            if has_policy_priors:
+                policy_priors[child.action] = float(child.prior)
 
         self._boards.append(np.array(state.board, dtype=np.int8, copy=True))
         self._territories.append(
@@ -93,6 +101,8 @@ class SelfPlayTrajectory:
         )
         self._q_values.append(q_values)
         self._visit_counts.append(visit_counts)
+        self._policy_priors.append(policy_priors)
+        self._has_policy_priors.append(has_policy_priors)
         self._legal_masks.append(legal_mask)
         self._selected_actions.append(action)
         self._completed_rollouts.append(int(search_stats.completed_rollouts))
@@ -147,6 +157,11 @@ class SelfPlayTrajectory:
             "q_values": np.stack(self._q_values),
             "q_perspective": np.asarray("player_to_move"),
             "visit_counts": np.stack(self._visit_counts),
+            "policy_priors": np.stack(self._policy_priors),
+            "has_policy_priors": np.asarray(
+                self._has_policy_priors,
+                dtype=np.uint8,
+            ),
             "legal_masks": np.stack(self._legal_masks),
             "selected_actions": np.asarray(
                 self._selected_actions,

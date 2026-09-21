@@ -36,6 +36,8 @@ class AnalysisGame:
     selected_actions: np.ndarray
     completed_rollouts: np.ndarray
     search_elapsed_seconds: np.ndarray
+    policy_priors: np.ndarray | None = None
+    has_policy_priors: np.ndarray | None = None
 
     @property
     def rows(self):
@@ -49,4 +51,3 @@ class AnalysisGame:
     def frame_count(self):
         """Number of saved pre-move decision states in the trajectory."""
         return int(self.boards.shape[0])
-

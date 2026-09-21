@@ -56,7 +56,13 @@ def _coordinate(values):
     return [int(values[0]), int(values[1])]
 
 
-def selected_action_statistics(q_values, visit_counts, legal_mask, action):
+def selected_action_statistics(
+    q_values,
+    visit_counts,
+    legal_mask,
+    action,
+    policy_priors=None,
+):
     """Return the action metrics shared by saved, replay, and live frames."""
     row, col = (int(value) for value in action)
     visits = int(visit_counts[row, col])
@@ -64,6 +70,17 @@ def selected_action_statistics(q_values, visit_counts, legal_mask, action):
     total_visits = int(visit_counts.sum())
     mean_value = raw_q / visits if visits else None
     policy = visits / total_visits if total_visits else 0.0
+    prior = None
+    prior_rank = None
+    policy_delta = None
+    policy_amplification = None
+    if policy_priors is not None:
+        prior = float(policy_priors[row, col])
+        legal_priors = policy_priors[legal_mask == 1]
+        prior_rank = 1 + int(np.count_nonzero(legal_priors > prior))
+        policy_delta = policy - prior
+        if prior > 0:
+            policy_amplification = policy / prior
 
     visited_legal = (
         (legal_mask == 1)
@@ -86,9 +103,41 @@ def selected_action_statistics(q_values, visit_counts, legal_mask, action):
         "visits": visits,
         "mean_value": mean_value,
         "policy": policy,
+        "visit_share": policy,
+        "prior": prior,
+        "prior_rank": prior_rank,
+        "policy_delta": policy_delta,
+        "policy_amplification": policy_amplification,
         "value_rank": value_rank,
         "visit_rank": visit_rank,
     }
+
+
+def _root_policy_priors(root, shape):
+    """Return the exact root priors used by neural MCTS, when available."""
+
+    if not root.children or not all(
+        hasattr(child, "prior") for child in root.children
+    ):
+        return None
+
+    policy_priors = np.zeros(shape, dtype=np.float32)
+    for child in root.children:
+        prior = float(child.prior)
+        if not np.isfinite(prior) or prior < 0:
+            raise ValueError("MCTS child priors must be finite and non-negative")
+        policy_priors[child.action] = prior
+    return policy_priors
+
+
+def _saved_policy_priors(game, frame_index):
+    """Read optional search-time priors from a backward-compatible game."""
+
+    if game.policy_priors is None or game.has_policy_priors is None:
+        return None
+    if not bool(game.has_policy_priors[frame_index]):
+        return None
+    return game.policy_priors[frame_index]
 
 
 def mcts_decision_frame(
@@ -104,6 +153,7 @@ def mcts_decision_frame(
     shape = state.board.shape
     q_values = np.zeros(shape, dtype=np.float32)
     visit_counts = np.zeros(shape, dtype=np.int64)
+    policy_priors = _root_policy_priors(root, shape)
     legal_mask = np.zeros(shape, dtype=np.uint8)
     for action in state.get_legal_actions():
         legal_mask[action] = 1
@@ -133,6 +183,9 @@ def mcts_decision_frame(
         "q_values": q_values.tolist(),
         "q_perspective": "player_to_move",
         "visit_counts": visit_counts.tolist(),
+        "policy_priors": (
+            policy_priors.tolist() if policy_priors is not None else None
+        ),
         "legal_mask": legal_mask.tolist(),
         "legal_move_count": int(np.count_nonzero(legal_mask)),
         "selected_action": list(action),
@@ -141,6 +194,7 @@ def mcts_decision_frame(
             visit_counts,
             legal_mask,
             action,
+            policy_priors,
         ),
         "completed_rollouts": completed_rollouts,
         "elapsed_seconds": elapsed_seconds,
@@ -154,11 +208,13 @@ def analysis_summary(analysis_id, game):
     """Return metadata and lightweight descriptors for the complete timeline."""
     timeline = []
     for frame_index in range(game.frame_count):
+        policy_priors = _saved_policy_priors(game, frame_index)
         selected = selected_action_statistics(
             game.q_values[frame_index],
             game.visit_counts[frame_index],
             game.legal_masks[frame_index],
             game.selected_actions[frame_index],
+            policy_priors,
         )
         timeline.append(
             {
@@ -172,6 +228,8 @@ def analysis_summary(analysis_id, game):
                 "selected_action": selected["coordinate"],
                 "selected_mean_value": selected["mean_value"],
                 "selected_visits": selected["visits"],
+                "selected_prior": selected["prior"],
+                "selected_visit_share": selected["visit_share"],
                 "completed_rollouts": int(
                     game.completed_rollouts[frame_index]
                 ),
@@ -222,6 +280,7 @@ def analysis_frame(game, frame_index):
     elapsed_seconds = float(game.search_elapsed_seconds[frame_index])
     completed_rollouts = int(game.completed_rollouts[frame_index])
     throughput = completed_rollouts / elapsed_seconds if elapsed_seconds else 0.0
+    policy_priors = _saved_policy_priors(game, frame_index)
 
     return {
         "index": frame_index,
@@ -238,6 +297,9 @@ def analysis_frame(game, frame_index):
         "q_values": game.q_values[frame_index].tolist(),
         "q_perspective": game.q_perspective,
         "visit_counts": game.visit_counts[frame_index].tolist(),
+        "policy_priors": (
+            policy_priors.tolist() if policy_priors is not None else None
+        ),
         "legal_mask": game.legal_masks[frame_index].tolist(),
         "legal_move_count": int(np.count_nonzero(game.legal_masks[frame_index])),
         "selected_action": _coordinate(game.selected_actions[frame_index]),
@@ -246,6 +308,7 @@ def analysis_frame(game, frame_index):
             game.visit_counts[frame_index],
             game.legal_masks[frame_index],
             game.selected_actions[frame_index],
+            policy_priors,
         ),
         "completed_rollouts": completed_rollouts,
         "elapsed_seconds": elapsed_seconds,

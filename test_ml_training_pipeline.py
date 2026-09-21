@@ -151,17 +151,17 @@ def test_streaming_dataset_loads_games_concurrently_and_batches_positions():
         np.testing.assert_array_equal(weights["value"], 1.0)
 
 
-def test_existing_dual_head_architecture_adapts_to_25x25():
-    model = build_dual_head_model((25, 25))
+def test_existing_dual_head_architecture_adapts_to_30x30():
+    model = build_dual_head_model((30, 30))
     outputs = model(
         (
-            tf.zeros((1, 25, 25, 5), dtype=tf.float32),
+            tf.zeros((1, 30, 30, 5), dtype=tf.float32),
             tf.zeros((1, 2), dtype=tf.float32),
         ),
         training=False,
     )
 
-    assert outputs["policy"].shape == (1, 625)
+    assert outputs["policy"].shape == (1, 900)
     assert outputs["value"].shape == (1, 3)
 
 

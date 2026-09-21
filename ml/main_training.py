@@ -1,4 +1,4 @@
-"""Train the 25x25 dual-head model from filtered new_data games."""
+"""Train the 30x30 dual-head model from filtered new_data games."""
 
 from pathlib import Path
 import sys
@@ -20,27 +20,27 @@ DATA_DIRECTORY = (
     / "training_data"
     / "new_data"
     / "npz"
-    / "25x25_filtered"
+    / "30x30_filtered"
 )
 MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "25x25_088622_new_data_dual_head_v1.keras"
+    / "30x30_090507_new_data_dual_head_v1.keras"
 )
 HISTORY_PATH = (
     PROJECT_ROOT
     / "docs"
     / "imgs"
-    / "training_history_25x25_088622_new_data_dual_head_v1.png"
+    / "training_history_30x30_090507_new_data_dual_head_v1.png"
 )
 
-BOARD_SHAPE = (25, 25)
+BOARD_SHAPE = (30, 30)
 VALIDATION_FRACTION = 0.05
 TEST_FRACTION = 0.05
 DATA_SEED = 42
 BATCH_SIZE = 2048
-EPOCHS = 10
+EPOCHS = 7
 FILE_WORKERS = 13
 
 # The machine has 48 GB of unified memory. About 30 GiB of training tensors,

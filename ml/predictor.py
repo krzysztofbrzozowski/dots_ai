@@ -179,7 +179,7 @@ def _policy_result(model, predictions, state):
         raise ValueError(
             f"Model must return {action_count} finite policy logits"
         )
-    # Create logical mask from lega/possible moves -> before: (25, 25) -> reshape(-1) -> after: (625,)
+    # Flatten the board-shaped legal-move mask to match the policy logits.
     legal_mask = ((state.board == 0) & (state.territory == 0)).reshape(-1)
     if not np.any(legal_mask):
         raise ValueError("Cannot predict policy for a position without legal moves")
@@ -363,7 +363,7 @@ def main():
     predictor = DualHeadPredictor()
 
     # Build the position before the candidate move with zero-based coordinates.
-    state = DotsGame(10, 10)
+    state = DotsGame(30, 30)
     manual_moves = [(4, 4), (2, 1), (9, 9), (2, 3), (9, 8), (3, 2)]
     for move in manual_moves:
         state = state.move(move)

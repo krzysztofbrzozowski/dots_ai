@@ -10,8 +10,8 @@
     />
     <title>Dots — MCTS workspace</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/assets/analysis.css?v=20260921-live" />
-    <script type="module" src="/assets/analysis.js?v=20260921-live"></script>
+    <link rel="stylesheet" href="/assets/analysis.css?v=20260921-policy-split" />
+    <script type="module" src="/assets/analysis.js?v=20260921-policy-split"></script>
   </head>
   <body>
     <header class="app-header">
@@ -26,14 +26,24 @@
       <div class="header-actions">
         <span class="local-badge"><i aria-hidden="true"></i>Local workspace</span>
         <div class="analysis-actions">
-          <button
-            id="screenshot-button"
-            class="screenshot-button"
-            type="button"
-            aria-label="Download square screenshot"
-            title="Download square screenshot"
-            disabled
-          ></button>
+          <div class="screenshot-actions" role="group" aria-label="Screenshot exports">
+            <button
+              id="screenshot-button"
+              class="screenshot-button"
+              type="button"
+              aria-label="Download board-only square screenshot"
+              title="Download board-only square screenshot"
+              disabled
+            ></button>
+            <button
+              id="panel-screenshot-button"
+              class="screenshot-button panel-screenshot-button"
+              type="button"
+              aria-label="Download complete analysis panel screenshot"
+              title="Download complete analysis panel screenshot"
+              disabled
+            ></button>
+          </div>
           <label id="file-button" class="file-button" for="npz-file">
             <input id="npz-file" type="file" accept=".npz,application/octet-stream" />
             <span>Open NPZ game</span>
@@ -77,11 +87,11 @@
               <span id="player-pill" class="player-pill">No frame</span>
               <div id="overlay-switcher" class="overlay-switcher" role="group" aria-label="Board overlay">
                 <button type="button" data-overlay="head-value" aria-pressed="false" title="Predict the outcome after a clicked legal move">Head value</button>
-                <button type="button" data-overlay="head-policy" aria-pressed="false" title="Show the neural policy for every legal move">Policy head</button>
+                <button type="button" data-overlay="head-policy" aria-pressed="false" title="Show the recorded neural prior, or evaluate an older frame">Prior P</button>
                 <button class="is-active" type="button" data-overlay="value" aria-pressed="true" title="Mean rollout result (Q divided by visits)">Q / N</button>
                 <button type="button" data-overlay="raw-q" aria-pressed="false" title="Saved win/loss balance">Raw Q</button>
                 <button type="button" data-overlay="visits" aria-pressed="false" title="Completed visits per action">Visits</button>
-                <button type="button" data-overlay="policy" aria-pressed="false" title="Share of visits per action">Policy</button>
+                <button type="button" data-overlay="policy" aria-pressed="false" title="MCTS visit share after search">MCTS π</button>
                 <button type="button" data-overlay="none" aria-pressed="false" title="Show only the board and placed dots">None</button>
               </div>
             </div>
@@ -151,11 +161,35 @@
             </div>
             <div><span>Contents</span><strong id="cell-contents">—</strong></div>
             <div><span>Legal</span><strong id="cell-legal">—</strong></div>
-            <div><span>Raw Q</span><strong id="cell-raw-q">—</strong></div>
+            <div><span>Model prior P</span><strong id="cell-prior">—</strong></div>
             <div><span>Q / N</span><strong id="cell-value">—</strong></div>
             <div><span>Visits</span><strong id="cell-visits">—</strong></div>
-            <div><span>Policy</span><strong id="cell-policy">—</strong></div>
+            <div><span>MCTS share π</span><strong id="cell-visit-share">—</strong></div>
+            <div><span>P → π</span><strong id="cell-policy-flow">—</strong></div>
+            <div><span>Raw Q</span><strong id="cell-raw-q">—</strong></div>
           </section>
+
+          <details class="move-comparison">
+            <summary>
+              <span>Top moves · model → search</span>
+              <small id="move-comparison-note">Compare neural priors with MCTS results</small>
+            </summary>
+            <div class="move-comparison-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Move</th>
+                    <th>Prior P</th>
+                    <th>Q / N</th>
+                    <th>Visits N</th>
+                    <th>MCTS π</th>
+                    <th>Ranks P → π</th>
+                  </tr>
+                </thead>
+                <tbody id="move-comparison-body"></tbody>
+              </table>
+            </div>
+          </details>
 
           <section id="head-value-panel" class="head-value-panel" aria-labelledby="head-value-title" hidden>
             <div class="head-value-heading">
@@ -163,7 +197,7 @@
                 <p class="eyebrow">Value-head prediction</p>
                 <h3 id="head-value-title">Select a legal move</h3>
               </div>
-              <span id="head-value-model" class="model-chip">10x10_083769_dual_head_v1.keras</span>
+              <span id="head-value-model" class="model-chip">25x25_088622_new_data_dual_head_v1.keras</span>
             </div>
             <p id="head-value-message" class="head-value-message">
               Click an empty legal position to evaluate the result after that move.
@@ -179,15 +213,15 @@
           <section id="head-policy-panel" class="head-value-panel head-policy-panel" aria-labelledby="head-policy-title" hidden>
             <div class="head-value-heading">
               <div>
-                <p class="eyebrow">Policy-head prediction</p>
+                <p class="eyebrow">Model prior P</p>
                 <h3 id="head-policy-title">Current position</h3>
               </div>
-              <span id="head-policy-model" class="model-chip">10x10_083769_dual_head_v1.keras</span>
+              <span id="head-policy-model" class="model-chip">25x25_088622_new_data_dual_head_v1.keras</span>
             </div>
             <p id="head-policy-message" class="head-value-message">
-              Open a saved frame to predict probabilities for all legal moves.
+              Open a saved frame to inspect probabilities before MCTS search.
             </p>
-            <div class="head-value-results" aria-label="Policy-head move probabilities">
+            <div class="head-value-results" aria-label="Model prior probabilities">
               <div><span>Selected move</span><strong id="head-policy-selected">—</strong></div>
               <div><span>Selected prior</span><strong id="head-policy-selected-prior">—</strong></div>
               <div><span>Top move</span><strong id="head-policy-top-move">—</strong></div>

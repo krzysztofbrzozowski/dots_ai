@@ -36,6 +36,8 @@ For a game with `T` played moves on a `rows × cols` board, the file contains:
 | `scores` | `[T, 2]` | Player 1 and Player 2 scores |
 | `q_values` | `[T, rows, cols]` | Raw child `q`, aligned by `child.action` and evaluated for the player to move |
 | `visit_counts` | `[T, rows, cols]` | Raw child visit count `n`, aligned by `child.action` |
+| `policy_priors` | `[T, rows, cols]` | Neural root priors `P` used by PUCT, or zeros when unavailable |
+| `has_policy_priors` | `[T]` | `1` when the corresponding prior map is available, otherwise `0` |
 | `legal_masks` | `[T, rows, cols]` | `1` for legal actions and `0` otherwise |
 | `selected_actions` | `[T, 2]` | The real `(row, col)` moves played by MCTS |
 | `completed_rollouts` | `[T]` | Successful rollouts for each search |
@@ -45,6 +47,10 @@ For a game with `T` played moves on a `rows × cols` board, the file contains:
 The file also includes the schema version, game identifier, creation time,
 board shape, perspective labels, configured search-budget values, and rollout
 batch size.
+
+The two policy-prior arrays are optional schema-v1 extensions, so existing NPZ
+files remain readable. Neural MCTS writes a normalized map that sums to one over
+legal actions; classic rollout MCTS writes an unavailable flag and a zero map.
 
 The stored board remains absolute. A training loader chooses the model
 perspective later. For a player-to-move value target:

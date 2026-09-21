@@ -53,6 +53,8 @@ def test_raw_q_and_n_are_aligned_by_child_action():
         assert np.count_nonzero(stored["boards"]) == 0
         assert stored["q_values"][0].tolist() == [[1.0, 0.0], [-3.0, 2.0]]
         assert stored["visit_counts"][0].tolist() == [[1, 2], [5, 4]]
+        assert stored["has_policy_priors"].tolist() == [0]
+        assert np.count_nonzero(stored["policy_priors"]) == 0
         assert stored["legal_masks"][0].tolist() == [[1, 1], [1, 1]]
         assert stored["selected_actions"].tolist() == [[0, 0]]
         assert stored["completed_rollouts"].tolist() == [12]

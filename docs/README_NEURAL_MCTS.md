@@ -1,7 +1,7 @@
 # Sequential neural MCTS
 
 `main_mcts_ml.py` is an isolated policy/value MCTS entry point. It uses
-`ml/models/25x25_088622_new_data_dual_head_v1.keras` and the same live GUI as
+`ml/models/30x30_090507_new_data_dual_head_v1.keras` and the same live GUI as
 the classic application, without changing `main_mcts.py` or its rollout-based
 search.
 
@@ -40,8 +40,8 @@ single model inference, expansion, and backpropagation before the next one
 begins. There is no process pool and the Keras model is never copied between
 workers.
 
-Children are lightweight until visited. Expanding the empty 25 × 25 root
-creates 625 action/prior nodes, but does not create 625 independent game-state
+Children are lightweight until visited. Expanding the empty 30 × 30 root
+creates 900 action/prior nodes, but does not create 900 independent game-state
 copies. A child applies its move only when PUCT first selects it.
 
 ## Model semantics
@@ -61,11 +61,13 @@ MCTS.
 
 The main settings live at the top of `main_mcts_ml.py`:
 
-- `ROWS` and `COLS` must remain 25 for the configured checkpoint;
+- `ROWS` and `COLS` must remain 30 for the configured checkpoint;
 - `SIMULATION_SECONDS` controls the per-move wall-clock budget;
 - `DEFAULT_SIMULATIONS` is used when the time budget is set to `None`;
 - `C_PUCT` controls the policy-prior exploration bonus;
 - completed games are stored below `training_data/neural_mcts`.
 
-The stored filename ends in `_neural-mcts.npz`. Array names and Q/visit
-semantics remain compatible with the existing analyzer and training loader.
+The stored filename ends in `_neural-mcts.npz`. Alongside Q and visit counts,
+each frame stores the exact root policy priors used by PUCT. The analyzer shows
+these as `P` separately from the post-search visit distribution `π`; older NPZ
+files without priors remain compatible.

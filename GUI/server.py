@@ -43,6 +43,7 @@ def _position_frame(game, move_number):
         "q_values": [[0.0 for _ in range(cols)] for _ in range(rows)],
         "q_perspective": "player_to_move",
         "visit_counts": [[0 for _ in range(cols)] for _ in range(rows)],
+        "policy_priors": None,
         "legal_mask": legal_mask,
         "legal_move_count": len(legal_actions),
         "selected_action": None,
@@ -161,6 +162,10 @@ class LiveGameStore:
                 "selected_visits": int(
                     frame["selected_action_statistics"]["visits"]
                 ),
+                "selected_prior": frame["selected_action_statistics"]["prior"],
+                "selected_visit_share": frame["selected_action_statistics"][
+                    "visit_share"
+                ],
                 "completed_rollouts": int(frame["completed_rollouts"]),
                 "elapsed_seconds": float(frame["elapsed_seconds"]),
             }

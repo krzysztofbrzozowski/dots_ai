@@ -4,17 +4,19 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260921-live";
+} from "/shared/board_renderer.js?v=20260921-policy-split";
 
 
 const elements = {
   fileInput: document.querySelector("#npz-file"),
   fileButton: document.querySelector("#file-button"),
   screenshotButton: document.querySelector("#screenshot-button"),
+  panelScreenshotButton: document.querySelector("#panel-screenshot-button"),
   emptyFileButton: document.querySelector("#open-empty-file"),
   dropTarget: document.querySelector("#drop-target"),
   dropOverlay: document.querySelector("#drop-overlay"),
   workspace: document.querySelector(".workspace"),
+  boardPanel: document.querySelector(".board-panel"),
   gameTitle: document.querySelector("#game-title"),
   gameSubtitle: document.querySelector("#game-subtitle"),
   summaryBoard: document.querySelector("#summary-board"),
@@ -39,10 +41,14 @@ const elements = {
   cellTitle: document.querySelector("#cell-inspector-title"),
   cellContents: document.querySelector("#cell-contents"),
   cellLegal: document.querySelector("#cell-legal"),
+  cellPrior: document.querySelector("#cell-prior"),
   cellRawQ: document.querySelector("#cell-raw-q"),
   cellValue: document.querySelector("#cell-value"),
   cellVisits: document.querySelector("#cell-visits"),
-  cellPolicy: document.querySelector("#cell-policy"),
+  cellVisitShare: document.querySelector("#cell-visit-share"),
+  cellPolicyFlow: document.querySelector("#cell-policy-flow"),
+  moveComparisonNote: document.querySelector("#move-comparison-note"),
+  moveComparisonBody: document.querySelector("#move-comparison-body"),
   headValuePanel: document.querySelector("#head-value-panel"),
   headValueTitle: document.querySelector("#head-value-title"),
   headValueModel: document.querySelector("#head-value-model"),
@@ -129,6 +135,9 @@ const view = {
 
 
 const MAX_DIAGNOSTIC_LINES = 160;
+const TOP_MOVE_ROW_COUNT = 6;
+const PANEL_EXPORT_WIDTH = 1180;
+const PANEL_EXPORT_BOARD_HEIGHT = 590;
 
 
 const boardRenderer = new DotsBoardRenderer(
@@ -203,6 +212,183 @@ function formatDecimal(value, digits = 2, showSign = false) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   const formatted = value.toFixed(digits);
   return showSign && value >= 0 ? `+${formatted}` : formatted;
+}
+
+
+function formatPercent(value, digits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+
+function policyPriorsForCurrentFrame() {
+  return view.frame?.policy_priors || view.headPolicyPrediction?.policy || null;
+}
+
+
+function policyPriorAt(cell) {
+  if (!cell) return null;
+  const priors = policyPriorsForCurrentFrame();
+  const value = priors?.[cell[0]]?.[cell[1]];
+  return Number.isFinite(value) ? value : null;
+}
+
+
+function topMovesFromPolicy(policy, legalMask, limit = 5) {
+  if (!policy || !legalMask) return [];
+  const moves = [];
+  for (let row = 0; row < policy.length; row += 1) {
+    for (let col = 0; col < policy[row].length; col += 1) {
+      const probability = policy[row][col];
+      if (legalMask[row]?.[col] && Number.isFinite(probability)) {
+        moves.push({ coordinate: [row, col], probability });
+      }
+    }
+  }
+  moves.sort((left, right) => right.probability - left.probability);
+  return moves.slice(0, limit);
+}
+
+
+function embeddedHeadPolicyPrediction(frame) {
+  if (!frame?.policy_priors) return null;
+  return {
+    player: frame.player_to_move,
+    move_number: frame.move_number,
+    model: "search-time prior",
+    policy: frame.policy_priors,
+    top_moves: topMovesFromPolicy(
+      frame.policy_priors,
+      frame.legal_mask,
+    ),
+    source: "search",
+  };
+}
+
+
+function renderMoveComparison() {
+  elements.moveComparisonBody.replaceChildren();
+  const frame = view.frame;
+  if (!frame || !frame.selected_action) {
+    elements.moveComparisonNote.textContent = "Available after a search completes";
+    return;
+  }
+
+  const priors = policyPriorsForCurrentFrame();
+  const totalVisits = frame.visit_counts
+    .flat()
+    .reduce((sum, value) => sum + value, 0);
+  const actions = [];
+  for (let row = 0; row < frame.rows; row += 1) {
+    for (let col = 0; col < frame.cols; col += 1) {
+      if (!frame.legal_mask[row][col]) continue;
+      const visits = frame.visit_counts[row][col];
+      const prior = priors?.[row]?.[col];
+      if (!visits && !Number.isFinite(prior)) continue;
+      const rawQ = frame.q_values[row][col];
+      actions.push({
+        coordinate: [row, col],
+        prior: Number.isFinite(prior) ? prior : null,
+        meanValue: visits ? rawQ / visits : null,
+        visits,
+        visitShare: totalVisits ? visits / totalVisits : 0,
+      });
+    }
+  }
+
+  for (const action of actions) {
+    action.priorRank = action.prior === null
+      ? null
+      : 1 + actions.filter((candidate) =>
+        candidate.prior !== null && candidate.prior > action.prior
+      ).length;
+    action.visitRank = 1 + actions.filter(
+      (candidate) => candidate.visits > action.visits
+    ).length;
+  }
+  const byVisits = [...actions].sort((left, right) =>
+    right.visits - left.visits ||
+    (right.prior ?? -1) - (left.prior ?? -1)
+  );
+  const byPrior = priors
+    ? [...actions].sort((left, right) =>
+      (right.prior ?? -1) - (left.prior ?? -1) ||
+      right.visits - left.visits
+    )
+    : [];
+  const selectedKey = frame.selected_action.join(":");
+  const selectedAction = actions.find(
+    (candidate) => candidate.coordinate.join(":") === selectedKey
+  );
+  const candidatesByKey = new Map();
+  for (const action of [...byVisits, ...byPrior]) {
+    candidatesByKey.set(action.coordinate.join(":"), action);
+  }
+  const candidates = [...candidatesByKey.values()].sort((left, right) => {
+    const leftBestRank = Math.min(
+      left.visitRank,
+      left.priorRank ?? Number.POSITIVE_INFINITY,
+    );
+    const rightBestRank = Math.min(
+      right.visitRank,
+      right.priorRank ?? Number.POSITIVE_INFINITY,
+    );
+    const leftRankSum = left.visitRank + (left.priorRank ?? left.visitRank);
+    const rightRankSum = right.visitRank + (right.priorRank ?? right.visitRank);
+    return leftBestRank - rightBestRank ||
+      leftRankSum - rightRankSum ||
+      left.visitRank - right.visitRank;
+  });
+  const displayedByKey = new Map();
+  if (selectedAction) displayedByKey.set(selectedKey, selectedAction);
+  for (const action of candidates) {
+    if (displayedByKey.size >= TOP_MOVE_ROW_COUNT) break;
+    displayedByKey.set(action.coordinate.join(":"), action);
+  }
+  const displayedActions = [...displayedByKey.values()].sort((left, right) =>
+    left.visitRank - right.visitRank ||
+    (left.priorRank ?? Number.POSITIVE_INFINITY) -
+      (right.priorRank ?? Number.POSITIVE_INFINITY)
+  );
+
+  elements.moveComparisonNote.textContent = frame.policy_priors
+    ? "Exact prior used by this search"
+    : priors
+      ? "Fresh model inference; not stored with this search"
+      : "Model prior unavailable in this recording";
+
+  for (const action of displayedActions) {
+    const row = document.createElement("tr");
+    const isSelected =
+      action.coordinate[0] === frame.selected_action[0] &&
+      action.coordinate[1] === frame.selected_action[1];
+    row.classList.toggle("is-selected", isSelected);
+
+    const moveCell = document.createElement("td");
+    const moveButton = document.createElement("button");
+    moveButton.type = "button";
+    moveButton.textContent = formatCoordinate(action.coordinate);
+    moveButton.title = `Inspect ${formatCoordinate(action.coordinate)}`;
+    moveButton.addEventListener("click", () => selectBoardCell(action.coordinate));
+    moveCell.append(moveButton);
+
+    const values = [
+      formatPercent(action.prior),
+      formatDecimal(action.meanValue, 3, true),
+      formatInteger(action.visits),
+      formatPercent(action.visitShare),
+      action.priorRank === null
+        ? `— → #${action.visitRank}`
+        : `#${action.priorRank} → #${action.visitRank}`,
+    ];
+    row.append(moveCell);
+    for (const value of values) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    }
+    elements.moveComparisonBody.append(row);
+  }
 }
 
 
@@ -841,6 +1027,7 @@ function resetHeadPolicyPanel(message) {
   ]) {
     result.textContent = "—";
   }
+  renderMoveComparison();
 }
 
 
@@ -871,8 +1058,9 @@ function displayHeadPolicyPrediction(prediction) {
     `Before move ${prediction.move_number} for ${playerName(prediction.player)}`;
   elements.headPolicyModel.textContent = prediction.model;
   elements.headPolicyModel.title = prediction.model;
-  elements.headPolicyMessage.textContent =
-    "Probabilities are normalized over legal moves in the current position.";
+  elements.headPolicyMessage.textContent = prediction.source === "search"
+    ? "Exact neural priors captured before MCTS changed the move distribution."
+    : "Probabilities are normalized over legal moves in the current position.";
 
   const topMove = prediction.top_moves?.[0];
   elements.headPolicyTopMove.textContent = topMove
@@ -882,11 +1070,27 @@ function displayHeadPolicyPrediction(prediction) {
     ? `${(topMove.probability * 100).toFixed(2)}%`
     : "—";
   displayHeadPolicySelection(view.selectedCell);
+  renderMoveComparison();
+  if (view.selectedCell) selectBoardCell(view.selectedCell, false);
 }
 
 
 async function requestHeadPolicy() {
   if (!view.analysis || !view.frame || view.displayingExperiment) return;
+
+  const embeddedPrediction = embeddedHeadPolicyPrediction(view.frame);
+  if (embeddedPrediction) {
+    cancelHeadPolicyPrediction();
+    resetHeadPolicyPanel();
+    displayHeadPolicyPrediction(embeddedPrediction);
+    return;
+  }
+  if (view.mode === "live") {
+    showHeadPolicyError(
+      "This live frame does not contain a neural model prior.",
+    );
+    return;
+  }
 
   const frameIndex = view.frameIndex;
   const cacheKey = `${view.analysis.analysis_id}:${frameIndex}`;
@@ -1076,6 +1280,9 @@ function updateGameOverview() {
 
 function displayLivePosition(frame) {
   view.requestNumber += 1;
+  cancelHeadPolicyPrediction();
+  view.headPolicyPrediction = null;
+  boardRenderer.setHeadPolicy(null);
   view.timelineSource = "original";
   view.displayingExperiment = false;
   view.frame = frame;
@@ -1142,7 +1349,7 @@ function configureLiveMode() {
   elements.dropOverlay.hidden = true;
   elements.experimentPanel.hidden = true;
   elements.timelineSourceSwitcher.hidden = true;
-  for (const name of ["head-value", "head-policy"]) {
+  for (const name of ["head-value"]) {
     const button = elements.overlaySwitcher.querySelector(
       `[data-overlay="${name}"]`,
     );
@@ -1227,6 +1434,9 @@ function buildTimeline() {
         player_to_move: frame.player_to_move,
         selected_action: frame.selected_action,
         selected_mean_value: frame.selected_action_statistics?.mean_value ?? null,
+        selected_prior: frame.selected_action_statistics?.prior ?? null,
+        selected_visit_share:
+          frame.selected_action_statistics?.visit_share ?? null,
       }))
     : view.analysis?.timeline || [];
 
@@ -1265,9 +1475,15 @@ function buildTimeline() {
     );
 
     details.className = "timeline-item-details";
+    const policyFlow = Number.isFinite(descriptor.selected_prior)
+      ? ` · P ${formatPercent(descriptor.selected_prior, 1)} → ` +
+        `π ${formatPercent(descriptor.selected_visit_share, 1)}`
+      : Number.isFinite(descriptor.selected_visit_share)
+        ? ` · MCTS π ${formatPercent(descriptor.selected_visit_share, 1)}`
+        : "";
     details.textContent =
       `${playerName(descriptor.player_to_move)} · ` +
-      `action ${formatCoordinate(descriptor.selected_action)}`;
+      `action ${formatCoordinate(descriptor.selected_action)}${policyFlow}`;
 
     value.className = "timeline-item-value";
     value.textContent = descriptor.selected_mean_value === null
@@ -1335,6 +1551,8 @@ async function selectOriginalFrame(
   );
   cancelHeadValuePrediction();
   cancelHeadPolicyPrediction();
+  view.headPolicyPrediction = null;
+  boardRenderer.setHeadPolicy(null);
   if (view.overlay === "head-value") resetHeadValuePanel();
   if (view.overlay === "head-policy") resetHeadPolicyPanel();
   const requestNumber = ++view.requestNumber;
@@ -1398,6 +1616,8 @@ function selectReplayFrame(
   view.requestNumber += 1;
   cancelHeadValuePrediction();
   cancelHeadPolicyPrediction();
+  view.headPolicyPrediction = null;
+  boardRenderer.setHeadPolicy(null);
   if (view.overlay === "head-value") {
     resetHeadValuePanel(
       "Value-head requests are available on saved frames, not forced replay frames.",
@@ -1482,7 +1702,9 @@ function updateFrameDisplay() {
     : `${frame.move_number} / ${view.analysis.frame_count}`;
   elements.frameAction.textContent = selected
     ? `${formatCoordinate(frame.selected_action)} · ` +
-      `${formatDecimal(selected.mean_value, 2, true)} Q/N`
+      `${formatDecimal(selected.mean_value, 2, true)} Q/N · ` +
+      `${Number.isFinite(selected.prior) ? `P ${formatPercent(selected.prior, 1)} → ` : ""}` +
+      `π ${formatPercent(selected.visit_share ?? selected.policy, 1)}`
     : frame.game_over ? "Game complete" : "Searching…";
   elements.frameScore.textContent =
     `${frame.scores.player_1} — ${frame.scores.player_2}`;
@@ -1512,10 +1734,15 @@ function updateFrameDisplay() {
   boardRenderer.setFrame(frame);
   boardRenderer.setOverlay(view.overlay);
   selectBoardCell(view.selectedCell, false);
-  if (!isLivePosition && view.overlay === "head-policy") {
+  renderMoveComparison();
+  if (view.overlay === "head-policy") {
     if (isExperiment) {
       showHeadPolicyError(
         "Policy-head requests are available on saved frames, not forced replay frames.",
+      );
+    } else if (isLivePosition && !frame.policy_priors) {
+      showHeadPolicyError(
+        "The model prior appears after the current search completes.",
       );
     } else {
       requestHeadPolicy();
@@ -1527,7 +1754,27 @@ function updateFrameDisplay() {
 
 
 function selectBoardCell(cell, runHeadValuePrediction = true) {
-  if (!view.frame || !cell) return;
+  if (!view.frame) return;
+  if (!cell) {
+    view.selectedCell = null;
+    elements.cellTitle.textContent = "Select a cell";
+    for (const value of [
+      elements.cellContents,
+      elements.cellLegal,
+      elements.cellPrior,
+      elements.cellRawQ,
+      elements.cellValue,
+      elements.cellVisits,
+      elements.cellVisitShare,
+      elements.cellPolicyFlow,
+    ]) {
+      value.textContent = "—";
+    }
+    elements.headPolicySelected.textContent = "—";
+    elements.headPolicySelectedPrior.textContent = "—";
+    boardRenderer.setSelectedCell(null);
+    return;
+  }
 
   const [row, col] = cell;
   const contents = view.frame.board[row][col];
@@ -1540,6 +1787,7 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
     .reduce((sum, value) => sum + value, 0);
   const meanValue = visits ? rawQ / visits : null;
   const policy = totalVisits ? visits / totalVisits : 0;
+  const prior = policyPriorAt(cell);
   const isSelectedAction =
     Boolean(view.frame.selected_action) &&
     row === view.frame.selected_action[0] && col === view.frame.selected_action[1];
@@ -1556,6 +1804,7 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
     `Position ${formatCoordinate(cell)}${isSelectedAction ? " · selected action" : ""}`;
   elements.cellContents.textContent = contentsLabel;
   elements.cellLegal.textContent = isLegal ? "Yes" : "No";
+  elements.cellPrior.textContent = isLegal ? formatPercent(prior) : "—";
   elements.cellRawQ.textContent = visits
     ? formatDecimal(rawQ, 0, true)
     : isLegal ? "Unvisited" : "—";
@@ -1563,8 +1812,9 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
     ? formatDecimal(meanValue, 3, true)
     : isLegal ? "Unvisited" : "—";
   elements.cellVisits.textContent = isLegal ? formatInteger(visits) : "—";
-  elements.cellPolicy.textContent = isLegal
-    ? `${(policy * 100).toFixed(2)}%`
+  elements.cellVisitShare.textContent = isLegal ? formatPercent(policy) : "—";
+  elements.cellPolicyFlow.textContent = isLegal && prior !== null
+    ? `${formatPercent(prior)} → ${formatPercent(policy)}`
     : "—";
   boardRenderer.setSelectedCell(cell);
 
@@ -1755,11 +2005,11 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
   }
   const descriptions = {
     "head-value": "Click a legal position · prediction appears below",
-    "head-policy": "Neural move probabilities · legal moves only",
+    "head-policy": "Model prior P · before MCTS search",
     value: "Mean result · player-to-move perspective",
     "raw-q": "Win/loss balance · player-to-move perspective",
     visits: "Completed visits · brighter means more visits",
-    policy: "Share of visits · brighter means higher probability",
+    policy: "MCTS visit share π · after search",
     none: "Board and placed dots · search overlays hidden",
   };
   const isHeadValue = view.overlay === "head-value";
@@ -1779,13 +2029,13 @@ elements.overlaySwitcher.addEventListener("click", (event) => {
     resetHeadValuePanel(
       view.frame
         ? undefined
-        : "Open a saved 10 × 10 game, then click a legal position.",
+        : "Open a saved game, then click a legal position.",
     );
   }
   boardRenderer.setOverlay(view.overlay);
   if (isHeadPolicy) {
     if (!view.frame) {
-      resetHeadPolicyPanel("Open a saved 10 × 10 game to predict its policy.");
+      resetHeadPolicyPanel("Open a saved game to inspect its model prior.");
     } else if (view.displayingExperiment) {
       showHeadPolicyError(
         "Policy-head requests are available on saved frames, not forced replay frames.",

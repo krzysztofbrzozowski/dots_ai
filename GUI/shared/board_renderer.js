@@ -118,6 +118,35 @@ export class DotsBoardRenderer {
     return output;
   }
 
+  renderCanvas(width, height, pixelRatio = 2) {
+    if (!this.frame || !this.layout) {
+      throw new Error("A board frame must be visible before it can be exported.");
+    }
+
+    const logicalWidth = Math.max(1, Math.round(width));
+    const logicalHeight = Math.max(1, Math.round(height));
+    const scale = Math.max(1, Number(pixelRatio) || 1);
+    const output = document.createElement("canvas");
+    output.width = Math.round(logicalWidth * scale);
+    output.height = Math.round(logicalHeight * scale);
+    const outputContext = output.getContext("2d");
+    if (!outputContext) throw new Error("The screenshot canvas is unavailable.");
+    outputContext.setTransform(scale, 0, 0, scale, 0, 0);
+
+    const visibleContext = this.context;
+    const visibleLayout = this.layout;
+    try {
+      this.context = outputContext;
+      this.layout = this.layoutForSize(logicalWidth, logicalHeight);
+      this.draw();
+    } finally {
+      this.context = visibleContext;
+      this.layout = visibleLayout;
+    }
+
+    return output;
+  }
+
   resizeAndDraw() {
     const bounds = this.canvas.getBoundingClientRect();
     const width = Math.max(1, bounds.width);

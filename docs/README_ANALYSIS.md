@@ -46,33 +46,35 @@ The center board renders the state before the selected move. Seven board modes
 are available:
 
 - **Head value** — click a legal move to evaluate the position after that move
-  with `25x25_088622_new_data_dual_head_v1.keras`;
-- **Policy head** — show the dual-head model's probability for every legal move
-  in the current position;
+  with `30x30_090507_new_data_dual_head_v1.keras`;
+- **Prior P** — show the neural policy prior before MCTS search;
 - **Q / N** — the mean rollout result from the current player's perspective;
 - **Raw Q** — the saved child win/loss balance;
 - **Visits** — the raw child visit count;
-- **Policy** — the visit share among root children;
+- **MCTS π** — the visit share among root children after search;
 - **None** — the board position without a search or model overlay.
 
 Head value results appear below the board as loss, draw, and win probabilities,
 plus `P(win) - P(loss)`. All four values use the perspective of the player making
 the candidate move. The model is loaded on the first prediction and then reused.
-Its current checkpoint accepts 25 × 25 positions.
+Its configured checkpoint accepts 30 × 30 positions.
 
-Policy head probabilities are produced with one model inference for the current
-frame. Illegal cells are removed before softmax, so their displayed probability
-is zero and the legal probabilities sum to one. This neural policy is separate
-from the saved MCTS **Policy** overlay derived from visit counts.
+New neural-MCTS recordings contain the exact normalized priors used to expand
+the root. Older recordings can still request a fresh policy-head inference for
+the current frame. Illegal cells are removed before softmax, so their displayed
+probability is zero and the legal probabilities sum to one. This neural prior
+`P` is separate from the MCTS visit distribution `π` derived after search.
 
 The bright outer ring identifies the action chosen by MCTS. A small empty ring
 identifies a legal action with no completed visit. This distinction matters
 because schema v1 stores zero for both an unvisited action and a genuinely
 neutral raw Q value.
 
-Click any board intersection to inspect its dot, territory, legality, raw Q,
-mean value, visits, and visit-policy share. In **Head value** mode, clicking an
-empty legal intersection also runs the prediction.
+Click any board intersection to inspect its dot, territory, legality, model
+prior `P`, raw Q, mean value, visits, MCTS share `π`, and the `P → π` change.
+The expandable top-moves table compares both distributions and their ranks. In
+**Head value** mode, clicking an empty legal intersection also runs the
+prediction.
 
 The left timeline is a vertically snapping decision wheel. It supports:
 
@@ -127,9 +129,9 @@ frame as a playable game state, applies the clicked move, and sends the resultin
 position through `ml/predictor.py`. The response uses the moving player's
 perspective even though the model evaluates the opponent's next turn.
 
-For a Policy head request, the server evaluates the pre-move frame directly,
-masks illegal cells, and normalizes the remaining policy logits. No candidate
-move is applied and MCTS is not invoked.
+For a fresh Prior P request on an older file, the server evaluates the pre-move
+frame directly, masks illegal cells, and normalizes the remaining policy logits.
+No candidate move is applied and MCTS is not invoked.
 
 Schema-specific NPZ names stop at the adapter. The service and browser consume
 the canonical `AnalysisGame`, so a future schema can add another adapter

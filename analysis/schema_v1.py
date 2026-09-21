@@ -35,6 +35,11 @@ REQUIRED_FIELDS = {
     "rollout_batch_size",
 }
 
+OPTIONAL_POLICY_FIELDS = {
+    "policy_priors",
+    "has_policy_priors",
+}
+
 
 def _scalar(arrays, name):
     value = arrays[name]
@@ -120,6 +125,48 @@ def adapt_schema_v1(arrays, file_name):
     }
     for name, expected_shape in shapes.items():
         _require_shape(name, arrays[name], expected_shape)
+
+    present_policy_fields = OPTIONAL_POLICY_FIELDS & arrays.keys()
+    if present_policy_fields and present_policy_fields != OPTIONAL_POLICY_FIELDS:
+        missing = sorted(OPTIONAL_POLICY_FIELDS - present_policy_fields)
+        raise AnalysisFileError(
+            "Optional policy-prior data is incomplete; missing: "
+            + ", ".join(missing)
+        )
+
+    policy_priors = None
+    has_policy_priors = None
+    if present_policy_fields:
+        policy_priors = arrays["policy_priors"]
+        has_policy_priors = arrays["has_policy_priors"]
+        _require_shape("policy_priors", policy_priors, board_stack_shape)
+        _require_shape("has_policy_priors", has_policy_priors, (frame_count,))
+        _require_finite_array("policy_priors", policy_priors)
+        _require_integer_array("has_policy_priors", has_policy_priors)
+        _require_values("has_policy_priors", has_policy_priors, (0, 1))
+
+        if np.any(policy_priors < 0):
+            raise AnalysisFileError("'policy_priors' cannot contain negative values")
+        if np.any(policy_priors[arrays["legal_masks"] == 0] != 0):
+            raise AnalysisFileError(
+                "'policy_priors' must be zero outside legal actions"
+            )
+
+        prior_totals = policy_priors.sum(axis=(1, 2))
+        available = has_policy_priors.astype(bool)
+        if np.any(prior_totals[~available] != 0):
+            raise AnalysisFileError(
+                "Frames without policy priors must contain an all-zero prior map"
+            )
+        if np.any(available) and not np.allclose(
+            prior_totals[available],
+            1.0,
+            rtol=1e-5,
+            atol=1e-6,
+        ):
+            raise AnalysisFileError(
+                "Available policy-prior maps must sum to one over legal actions"
+            )
 
     integer_fields = (
         "boards",
@@ -264,5 +311,6 @@ def adapt_schema_v1(arrays, file_name):
         selected_actions=arrays["selected_actions"],
         completed_rollouts=arrays["completed_rollouts"],
         search_elapsed_seconds=arrays["search_elapsed_seconds"],
+        policy_priors=policy_priors,
+        has_policy_priors=has_policy_priors,
     )
-

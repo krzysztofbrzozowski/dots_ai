@@ -139,6 +139,9 @@ def test_neural_game_runner_publishes_and_saves_compatible_trajectory():
     assert publications[0]["resulting_state"].board[0, 0] == PLAYER_1
     assert stored["selected_actions"].tolist() == [[0, 0]]
     assert stored["visit_counts"][0, 0, 0] == 1
+    assert stored["has_policy_priors"].tolist() == [1]
+    assert abs(float(stored["policy_priors"][0].sum()) - 1.0) < 1e-6
+    assert stored["policy_priors"][0, 0, 0] == 1.0
 
 
 if __name__ == "__main__":

@@ -284,6 +284,7 @@ def test_live_store_serializes_search_timeline_and_isolates_reads():
         selected.action
     )
     assert store.frame(0)["board"] == [[0, 0], [0, 0]]
+    assert store.frame(0)["policy_priors"] is None
     row, col = selected.action
     assert stored["current_frame"]["board"][row][col] == PLAYER_1
     assert stored["status"] == "searching"
