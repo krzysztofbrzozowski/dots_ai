@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260918-policy-head";
+} from "/shared/board_renderer.js?v=20260921-live";
 
 
 const elements = {
@@ -89,6 +89,7 @@ const elements = {
 
 
 const view = {
+  mode: "analysis",
   analysis: null,
   frame: null,
   frameIndex: 0,
@@ -120,6 +121,8 @@ const view = {
   dragDepth: 0,
   diagnosticsCursor: 0,
   diagnosticsPollTimer: null,
+  liveRevision: null,
+  livePollTimer: null,
   lastDiagnosticFrameKey: null,
   screenshotting: false,
 };
@@ -179,6 +182,7 @@ function playerName(player) {
 
 
 function resultName(result) {
+  if (result === null || result === undefined) return "In progress";
   if (result === PLAYER_1) return "Player 1 won";
   if (result === PLAYER_2) return "Player 2 won";
   return "Draw";
@@ -337,8 +341,11 @@ function logDiagnostic(message, { level = "info", source = "UI", timestamp } = {
 
 
 function logAnalysisMetadata(game) {
+  const schemaLabel = game.source_type === "live"
+    ? "live source"
+    : `schema v${game.schema_version}`;
   logDiagnostic(
-    `game ${game.game_id} · schema v${game.schema_version} · ` +
+    `game ${game.game_id} · ${schemaLabel} · ` +
       `${game.board.rows}x${game.board.cols} · ${game.frame_count} frames`,
     { level: "success", source: "SESSION" },
   );
@@ -440,7 +447,9 @@ function updateTimelineSourceControls() {
   originalButton.disabled = !hasOriginal;
   replayButton.disabled = !hasReplay;
   elements.originalTimelineRange.textContent = hasOriginal
-    ? `Moves 1–${view.analysis.frame_count}`
+    ? view.analysis.frame_count
+      ? `Moves 1–${view.analysis.frame_count}`
+      : view.mode === "live" ? "Waiting for move 1" : "No frames"
     : "Not loaded";
   elements.replayTimelineRange.textContent = hasReplay
     ? `Moves ${frames[0].move_number}–${frames.at(-1).move_number}`
@@ -459,11 +468,15 @@ function updateTimelineSourceControls() {
   );
   elements.timelineTitle.textContent = view.timelineSource === "replay"
     ? "Forced replay"
-    : "Moves";
+    : view.mode === "live" ? "Live moves" : "Moves";
 }
 
 
 function updateExperimentControls() {
+  if (view.mode === "live") {
+    updateTimelineSourceControls();
+    return;
+  }
   const experiment = view.experiment;
   const hasSavedFrame = Boolean(
     view.analysis && view.frame && view.timelineSource === "original",
@@ -939,7 +952,7 @@ async function requestHeadPolicy() {
 
 
 async function importGame(file) {
-  if (view.importing) return;
+  if (view.mode !== "analysis" || view.importing) return;
 
   view.importing = true;
   stopPlayback();
@@ -1045,7 +1058,9 @@ function updateGameOverview() {
     ? `${formatDuration(game.search.requested_simulation_seconds)} per move`
     : `${formatInteger(game.search.requested_simulations)} simulations per move`;
 
-  elements.gameTitle.textContent = game.file_name;
+  elements.gameTitle.textContent = view.mode === "live"
+    ? "Live MCTS game"
+    : game.file_name;
   elements.gameTitle.title = game.file_name;
   elements.gameSubtitle.textContent =
     `${createdLabel} · ${searchBudget} · ` +
@@ -1053,7 +1068,131 @@ function updateGameOverview() {
   elements.summaryBoard.textContent = `${game.board.rows} × ${game.board.cols}`;
   elements.summaryMoves.textContent = formatInteger(game.frame_count);
   elements.summaryResult.textContent = resultName(game.final_result);
-  elements.summarySchema.textContent = `v${game.schema_version}`;
+  elements.summarySchema.textContent = view.mode === "live"
+    ? "Live"
+    : `v${game.schema_version}`;
+}
+
+
+function displayLivePosition(frame) {
+  view.requestNumber += 1;
+  view.timelineSource = "original";
+  view.displayingExperiment = false;
+  view.frame = frame;
+  view.frameIndex = Math.max(0, view.analysis.frame_count - 1);
+  view.originalFrameIndex = view.frameIndex;
+  view.selectedCell = null;
+  updateActiveTimelineItem();
+  updatePlaybackControls();
+  if (view.analysis.frame_count) {
+    centerTimelineItem(view.frameIndex, false);
+  }
+  updateFrameDisplay();
+}
+
+
+async function refreshLiveGame() {
+  try {
+    const response = await fetch("/api/live", { cache: "no-store" });
+    const payload = await responsePayload(response);
+    if (!response.ok) {
+      throw new Error(payload?.detail || "The live MCTS game is not available.");
+    }
+    if (payload.revision === view.liveRevision) return;
+
+    const previousFrameCount = view.analysis?.frame_count || 0;
+    const wasFollowingLatest =
+      !view.frame ||
+      view.frame.live_position ||
+      view.originalFrameIndex >= Math.max(0, previousFrameCount - 1);
+    view.liveRevision = payload.revision;
+    view.analysis = payload.analysis;
+    updateGameOverview();
+
+    if (payload.analysis.frame_count !== previousFrameCount) {
+      buildTimeline();
+    }
+
+    if (wasFollowingLatest) {
+      if (payload.status === "complete" || payload.analysis.frame_count === 0) {
+        displayLivePosition(payload.current_frame);
+      } else if (payload.analysis.frame_count > previousFrameCount) {
+        await selectOriginalFrame(payload.analysis.frame_count - 1, {
+          centerTimeline: true,
+          smooth: true,
+        });
+      }
+    }
+
+    showStatus(
+      payload.message,
+      payload.status === "searching" ? "busy" : "normal",
+    );
+  } catch (error) {
+    showStatus(error.message || "Waiting for the live MCTS game…", "busy");
+  } finally {
+    view.livePollTimer = window.setTimeout(refreshLiveGame, 500);
+  }
+}
+
+
+function configureLiveMode() {
+  document.body.classList.add("live-mode");
+  elements.fileButton.hidden = true;
+  elements.dropOverlay.hidden = true;
+  elements.experimentPanel.hidden = true;
+  elements.timelineSourceSwitcher.hidden = true;
+  for (const name of ["head-value", "head-policy"]) {
+    const button = elements.overlaySwitcher.querySelector(
+      `[data-overlay="${name}"]`,
+    );
+    if (button) button.hidden = true;
+  }
+  document.querySelector(".brand-block p").textContent = "MCTS workspace";
+  document.querySelector(".game-identity .eyebrow").lastChild.textContent =
+    " Live self-play trajectory";
+  elements.summarySchema.previousElementSibling.textContent = "Source";
+  elements.timelineEmptyTitle.textContent = "Waiting for the first move";
+  elements.timelineEmptyMessage.textContent =
+    "The current position is visible while MCTS searches.";
+  logDiagnostic("live MCTS workspace ready", {
+    level: "success",
+    source: "SYSTEM",
+  });
+  refreshLiveGame();
+}
+
+
+async function initializeApplication() {
+  try {
+    const response = await fetch("/api/runtime", { cache: "no-store" });
+    const payload = await responsePayload(response);
+    if (!response.ok || !["analysis", "live"].includes(payload?.mode)) {
+      throw new Error("The GUI runtime mode is unavailable.");
+    }
+    view.mode = payload.mode;
+  } catch (error) {
+    showStatus(error.message || "Could not initialize the GUI.", "error");
+    logDiagnostic(error.message || "Could not initialize the GUI.", {
+      level: "error",
+      source: "SYSTEM",
+    });
+    return;
+  }
+
+  if (view.mode === "live") {
+    configureLiveMode();
+  } else {
+    logDiagnostic("analysis workspace ready · waiting for a saved game", {
+      level: "success",
+      source: "SYSTEM",
+    });
+    updateExperimentControls();
+  }
+  logDiagnostic("Python hook ready · from analysis import PRINT_T", {
+    source: "SYSTEM",
+  });
+  pollDiagnostics();
 }
 
 
@@ -1160,8 +1299,11 @@ async function fetchFrame(frameIndex) {
   }
 
   const analysisId = view.analysis.analysis_id;
+  const endpoint = view.mode === "live"
+    ? `/api/live/frames/${frameIndex}`
+    : `/api/analyses/${analysisId}/frames/${frameIndex}`;
   const pendingRequest = fetch(
-    `/api/analyses/${analysisId}/frames/${frameIndex}`,
+    endpoint,
     { cache: "no-store" },
   )
     .then(async (response) => {
@@ -1213,7 +1355,7 @@ async function selectOriginalFrame(
     if (requestNumber !== view.requestNumber) return;
 
     view.frame = frame;
-    view.selectedCell = [...frame.selected_action];
+    view.selectedCell = frame.selected_action ? [...frame.selected_action] : null;
     updateFrameDisplay();
     preloadNeighboringFrames(frameIndex);
     showStatus(
@@ -1319,28 +1461,41 @@ function updateFrameDisplay() {
   const frame = view.frame;
   const selected = frame.selected_action_statistics;
   const isExperiment = Boolean(frame.experiment);
+  const isLivePosition = Boolean(frame.live_position);
 
   elements.boardEmpty.hidden = true;
-  elements.boardTitle.textContent = isExperiment
-    ? `Forced replay · before move ${frame.move_number}`
-    : `Before move ${frame.move_number}`;
-  elements.playerPill.textContent = `${playerName(frame.player_to_move)} to move`;
+  elements.boardTitle.textContent = isLivePosition
+    ? frame.game_over ? "Final position" : `Move ${frame.move_number} · searching`
+    : isExperiment
+      ? `Forced replay · before move ${frame.move_number}`
+      : `Before move ${frame.move_number}`;
+  elements.playerPill.textContent = frame.game_over
+    ? resultName(frame.winner)
+    : `${playerName(frame.player_to_move)} to move`;
   elements.playerPill.className = frame.player_to_move === PLAYER_1
     ? "player-pill player-one"
     : "player-pill player-two";
-  elements.frameCounter.textContent = isExperiment
+  elements.frameCounter.textContent = isLivePosition
+    ? `${view.analysis.frame_count} completed`
+    : isExperiment
     ? `${frame.move_number} · ${view.replayFrameIndex + 1}/${replayFrames().length}`
     : `${frame.move_number} / ${view.analysis.frame_count}`;
-  elements.frameAction.textContent =
-    `${formatCoordinate(frame.selected_action)} · ` +
-    `${formatDecimal(selected.mean_value, 2, true)} Q/N`;
+  elements.frameAction.textContent = selected
+    ? `${formatCoordinate(frame.selected_action)} · ` +
+      `${formatDecimal(selected.mean_value, 2, true)} Q/N`
+    : frame.game_over ? "Game complete" : "Searching…";
   elements.frameScore.textContent =
     `${frame.scores.player_1} — ${frame.scores.player_2}`;
   elements.frameLegal.textContent = formatInteger(frame.legal_move_count);
-  elements.frameRollouts.textContent = formatInteger(frame.completed_rollouts);
-  elements.frameElapsed.textContent = formatDuration(frame.elapsed_seconds);
-  elements.frameThroughput.textContent =
-    `${formatInteger(Math.round(frame.rollouts_per_second))} / s`;
+  elements.frameRollouts.textContent = isLivePosition
+    ? "—"
+    : formatInteger(frame.completed_rollouts);
+  elements.frameElapsed.textContent = isLivePosition
+    ? "—"
+    : formatDuration(frame.elapsed_seconds);
+  elements.frameThroughput.textContent = isLivePosition
+    ? "—"
+    : `${formatInteger(Math.round(frame.rollouts_per_second))} / s`;
   for (const metric of document.querySelectorAll(".frame-summary strong")) {
     metric.title = metric.textContent;
   }
@@ -1348,15 +1503,16 @@ function updateFrameDisplay() {
   elements.board.setAttribute(
     "aria-label",
     `${frame.rows} by ${frame.cols} Dots board ` +
-    `${isExperiment ? "in the forced replay " : ""}before move ${frame.move_number}. ` +
-    `${playerName(frame.player_to_move)} to move. Selected action ` +
-    `${formatCoordinate(frame.selected_action)}.`,
+    `${isExperiment ? "in the forced replay " : ""}` +
+    `${isLivePosition && frame.game_over ? "at game end" : `before move ${frame.move_number}`}. ` +
+    `${frame.game_over ? resultName(frame.winner) : `${playerName(frame.player_to_move)} to move`}.` +
+    `${frame.selected_action ? ` Selected action ${formatCoordinate(frame.selected_action)}.` : ""}`,
   );
 
   boardRenderer.setFrame(frame);
   boardRenderer.setOverlay(view.overlay);
   selectBoardCell(view.selectedCell, false);
-  if (view.overlay === "head-policy") {
+  if (!isLivePosition && view.overlay === "head-policy") {
     if (isExperiment) {
       showHeadPolicyError(
         "Policy-head requests are available on saved frames, not forced replay frames.",
@@ -1385,6 +1541,7 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
   const meanValue = visits ? rawQ / visits : null;
   const policy = totalVisits ? visits / totalVisits : 0;
   const isSelectedAction =
+    Boolean(view.frame.selected_action) &&
     row === view.frame.selected_action[0] && col === view.frame.selected_action[1];
 
   let contentsLabel = "Empty";
@@ -1415,7 +1572,11 @@ function selectBoardCell(cell, runHeadValuePrediction = true) {
     displayHeadPolicySelection(cell);
   }
 
-  if (view.overlay === "head-value" && runHeadValuePrediction) {
+  if (
+    view.mode === "analysis" &&
+    view.overlay === "head-value" &&
+    runHeadValuePrediction
+  ) {
     if (view.displayingExperiment) {
       showHeadValueError(
         cell,
@@ -1673,6 +1834,7 @@ elements.timelineWheel.addEventListener("keydown", (event) => {
 
 for (const eventName of ["dragenter", "dragover"]) {
   elements.dropTarget.addEventListener(eventName, (event) => {
+    if (view.mode !== "analysis") return;
     event.preventDefault();
     if (eventName === "dragenter") view.dragDepth += 1;
     elements.dropOverlay.hidden = false;
@@ -1681,6 +1843,7 @@ for (const eventName of ["dragenter", "dragover"]) {
 
 
 elements.dropTarget.addEventListener("dragleave", (event) => {
+  if (view.mode !== "analysis") return;
   event.preventDefault();
   view.dragDepth = Math.max(0, view.dragDepth - 1);
   if (view.dragDepth === 0) elements.dropOverlay.hidden = true;
@@ -1688,6 +1851,7 @@ elements.dropTarget.addEventListener("dragleave", (event) => {
 
 
 elements.dropTarget.addEventListener("drop", (event) => {
+  if (view.mode !== "analysis") return;
   event.preventDefault();
   view.dragDepth = 0;
   elements.dropOverlay.hidden = true;
@@ -1721,12 +1885,4 @@ elements.copyDiagnostics.addEventListener("click", async () => {
 });
 
 
-logDiagnostic("analysis workspace ready · waiting for a saved game", {
-  level: "success",
-  source: "SYSTEM",
-});
-logDiagnostic("Python hook ready · from analysis import PRINT_T", {
-  source: "SYSTEM",
-});
-updateExperimentControls();
-pollDiagnostics();
+initializeApplication();

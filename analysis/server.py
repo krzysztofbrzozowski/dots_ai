@@ -92,6 +92,11 @@ def create_app(store=None, predictor=None, experiment_manager=None):
         """Report that the independent analysis application is running."""
         return {"status": "ready"}
 
+    @application.get("/api/runtime", include_in_schema=False)
+    def runtime():
+        """Tell the shared frontend which data source is available."""
+        return {"mode": "analysis"}
+
     @application.get("/api/diagnostics", include_in_schema=False)
     def get_diagnostics(after: int = Query(default=0, ge=0)):
         """Return diagnostic events created since the browser's last cursor."""

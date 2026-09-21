@@ -13,9 +13,8 @@ from inspect import signature
 from multiprocessing import get_context
 from threading import RLock, Thread
 
-import numpy as np
-
 from analysis.diagnostics import PRINT_T
+from analysis.service import mcts_decision_frame
 from game.enclosure import DotsGame
 from mcts.enclosure import (
     MonteCarloTreeSearch,
@@ -73,85 +72,6 @@ class ExperimentSearchConfig:
         }
 
 
-def _selected_action_statistics(q_values, visit_counts, legal_mask, action):
-    row, col = action
-    visits = int(visit_counts[row, col])
-    raw_q = float(q_values[row, col])
-    total_visits = int(visit_counts.sum())
-    mean_value = raw_q / visits if visits else None
-    policy = visits / total_visits if total_visits else 0.0
-
-    visited_legal = (legal_mask == 1) & (visit_counts > 0)
-    compared_visits = visit_counts[visited_legal]
-    compared_mean_values = q_values[visited_legal] / compared_visits
-    value_rank = None
-    visit_rank = None
-    if visits:
-        value_rank = 1 + int(np.count_nonzero(compared_mean_values > mean_value))
-        visit_rank = 1 + int(np.count_nonzero(compared_visits > visits))
-
-    return {
-        "coordinate": [int(row), int(col)],
-        "raw_q": raw_q,
-        "visits": visits,
-        "mean_value": mean_value,
-        "policy": policy,
-        "value_rank": value_rank,
-        "visit_rank": visit_rank,
-    }
-
-
-def _decision_frame(state, root, selected_action, search_stats, move_number):
-    """Build the same board-frame shape used by the saved-game renderer."""
-    shape = state.board.shape
-    q_values = np.zeros(shape, dtype=np.float32)
-    visit_counts = np.zeros(shape, dtype=np.int64)
-    legal_mask = np.zeros(shape, dtype=np.uint8)
-    for action in state.get_legal_actions():
-        legal_mask[action] = 1
-    for child in root.children:
-        q_values[child.action] = child.q
-        visit_counts[child.action] = int(child.n)
-
-    action = tuple(int(value) for value in selected_action)
-    elapsed_seconds = float(search_stats.elapsed_seconds)
-    completed_rollouts = int(search_stats.completed_rollouts)
-    throughput = completed_rollouts / elapsed_seconds if elapsed_seconds else 0.0
-    rows, cols = shape
-
-    return {
-        "experiment": True,
-        "index": None,
-        "move_number": int(move_number),
-        "rows": int(rows),
-        "cols": int(cols),
-        "board": state.board.tolist(),
-        "territory": state.territory.tolist(),
-        "player_to_move": int(state.next_to_move),
-        "scores": {
-            "player_1": int(state.score[1]),
-            "player_2": int(state.score[-1]),
-        },
-        "q_values": q_values.tolist(),
-        "q_perspective": "player_to_move",
-        "visit_counts": visit_counts.tolist(),
-        "legal_mask": legal_mask.tolist(),
-        "legal_move_count": int(np.count_nonzero(legal_mask)),
-        "selected_action": list(action),
-        "selected_action_statistics": _selected_action_statistics(
-            q_values,
-            visit_counts,
-            legal_mask,
-            action,
-        ),
-        "completed_rollouts": completed_rollouts,
-        "elapsed_seconds": elapsed_seconds,
-        "rollouts_per_second": throughput,
-        "is_first_frame": False,
-        "is_last_frame": False,
-    }
-
-
 @contextmanager
 def _rollout_executor(config):
     """Reuse one process pool across every move in a continuation."""
@@ -194,12 +114,13 @@ def _run_search(state, config, rollout_executor, move_number):
         raise RuntimeError("MCTS returned a node without an action")
     return (
         selected.state,
-        _decision_frame(
+        mcts_decision_frame(
             state,
             root,
             selected.action,
             search.last_search_stats,
             move_number,
+            experiment=True,
         ),
     )
 

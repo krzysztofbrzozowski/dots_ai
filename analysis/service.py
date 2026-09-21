@@ -56,21 +56,22 @@ def _coordinate(values):
     return [int(values[0]), int(values[1])]
 
 
-def _selected_action_statistics(game, frame_index):
-    row, col = (int(value) for value in game.selected_actions[frame_index])
-    visits = int(game.visit_counts[frame_index, row, col])
-    raw_q = float(game.q_values[frame_index, row, col])
-    total_visits = int(game.visit_counts[frame_index].sum())
+def selected_action_statistics(q_values, visit_counts, legal_mask, action):
+    """Return the action metrics shared by saved, replay, and live frames."""
+    row, col = (int(value) for value in action)
+    visits = int(visit_counts[row, col])
+    raw_q = float(q_values[row, col])
+    total_visits = int(visit_counts.sum())
     mean_value = raw_q / visits if visits else None
     policy = visits / total_visits if total_visits else 0.0
 
     visited_legal = (
-        (game.legal_masks[frame_index] == 1)
-        & (game.visit_counts[frame_index] > 0)
+        (legal_mask == 1)
+        & (visit_counts > 0)
     )
-    compared_visits = game.visit_counts[frame_index][visited_legal]
+    compared_visits = visit_counts[visited_legal]
     compared_mean_values = (
-        game.q_values[frame_index][visited_legal] / compared_visits
+        q_values[visited_legal] / compared_visits
     )
 
     value_rank = None
@@ -90,11 +91,75 @@ def _selected_action_statistics(game, frame_index):
     }
 
 
+def mcts_decision_frame(
+    state,
+    root,
+    selected_action,
+    search_stats,
+    move_number,
+    *,
+    experiment=False,
+):
+    """Serialize one completed search for every GUI timeline source."""
+    shape = state.board.shape
+    q_values = np.zeros(shape, dtype=np.float32)
+    visit_counts = np.zeros(shape, dtype=np.int64)
+    legal_mask = np.zeros(shape, dtype=np.uint8)
+    for action in state.get_legal_actions():
+        legal_mask[action] = 1
+    for child in root.children:
+        q_values[child.action] = child.q
+        visit_counts[child.action] = int(child.n)
+
+    action = tuple(int(value) for value in selected_action)
+    elapsed_seconds = float(search_stats.elapsed_seconds)
+    completed_rollouts = int(search_stats.completed_rollouts)
+    throughput = completed_rollouts / elapsed_seconds if elapsed_seconds else 0.0
+    rows, cols = shape
+
+    return {
+        "experiment": bool(experiment),
+        "index": None,
+        "move_number": int(move_number),
+        "rows": int(rows),
+        "cols": int(cols),
+        "board": state.board.tolist(),
+        "territory": state.territory.tolist(),
+        "player_to_move": int(state.next_to_move),
+        "scores": {
+            "player_1": int(state.score[1]),
+            "player_2": int(state.score[-1]),
+        },
+        "q_values": q_values.tolist(),
+        "q_perspective": "player_to_move",
+        "visit_counts": visit_counts.tolist(),
+        "legal_mask": legal_mask.tolist(),
+        "legal_move_count": int(np.count_nonzero(legal_mask)),
+        "selected_action": list(action),
+        "selected_action_statistics": selected_action_statistics(
+            q_values,
+            visit_counts,
+            legal_mask,
+            action,
+        ),
+        "completed_rollouts": completed_rollouts,
+        "elapsed_seconds": elapsed_seconds,
+        "rollouts_per_second": throughput,
+        "is_first_frame": int(move_number) == 1,
+        "is_last_frame": False,
+    }
+
+
 def analysis_summary(analysis_id, game):
     """Return metadata and lightweight descriptors for the complete timeline."""
     timeline = []
     for frame_index in range(game.frame_count):
-        selected = _selected_action_statistics(game, frame_index)
+        selected = selected_action_statistics(
+            game.q_values[frame_index],
+            game.visit_counts[frame_index],
+            game.legal_masks[frame_index],
+            game.selected_actions[frame_index],
+        )
         timeline.append(
             {
                 "index": frame_index,
@@ -176,9 +241,11 @@ def analysis_frame(game, frame_index):
         "legal_mask": game.legal_masks[frame_index].tolist(),
         "legal_move_count": int(np.count_nonzero(game.legal_masks[frame_index])),
         "selected_action": _coordinate(game.selected_actions[frame_index]),
-        "selected_action_statistics": _selected_action_statistics(
-            game,
-            frame_index,
+        "selected_action_statistics": selected_action_statistics(
+            game.q_values[frame_index],
+            game.visit_counts[frame_index],
+            game.legal_masks[frame_index],
+            game.selected_actions[frame_index],
         ),
         "completed_rollouts": completed_rollouts,
         "elapsed_seconds": elapsed_seconds,
@@ -186,4 +253,3 @@ def analysis_frame(game, frame_index):
         "is_first_frame": frame_index == 0,
         "is_last_frame": frame_index == game.frame_count - 1,
     }
-

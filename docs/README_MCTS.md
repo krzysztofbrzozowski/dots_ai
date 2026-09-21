@@ -309,7 +309,7 @@ steps:
 2. Creates `MonteCarloTreeSearch` using the persistent rollout executor.
 3. Runs simulations for the configured budget.
 4. Takes the state stored in the selected root child as the new real board.
-5. Publishes a serialized snapshot for the read-only GUI.
+5. Publishes a canonical decision frame for the shared live/analysis GUI.
 6. Waits for `DEFAULT_MOVE_DELAY` when the game is not over.
 7. Starts a new tree for the next real move.
 

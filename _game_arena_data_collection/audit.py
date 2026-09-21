@@ -17,7 +17,7 @@ from training import load_self_play_game
 def inspect_game(path, config=None):
     """Verify each pre-move frame, every legal action, and the terminal result."""
     path = Path(path)
-    load_analysis_path(path)  # Verify compatibility with the existing analysis GUI.
+    load_analysis_path(path)  # Verify compatibility with the shared MCTS GUI.
     game = load_self_play_game(path)
     rows, cols = map(int, game["board_shape"])
     state = DotsGame(rows, cols)

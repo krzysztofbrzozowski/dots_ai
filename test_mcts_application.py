@@ -1,13 +1,14 @@
-"""Integration tests for immutable MCTS states and the read-only display."""
+"""Integration tests for immutable MCTS states and the shared live GUI."""
 
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from threading import Thread
 from unittest.mock import patch
 
 import numpy as np
+from fastapi.testclient import TestClient
 
 from GUI.presentation import move_message
-from GUI.server import SnapshotStore, app, publish_state, snapshot_store
+from GUI.server import LiveGameStore, app
 from game.enclosure import EMPTY, PLAYER_1, PLAYER_2, DotsGame
 from main_mcts import run_mcts_game, run_parallel_mcts_game
 from mcts.enclosure import MonteCarloTreeSearch, TwoPlayerMCTSNode
@@ -251,77 +252,83 @@ def test_process_pool_lifecycle_inside_game_thread():
     assert results[0].game_result is not None
 
 
-def test_published_snapshot_is_serialized_and_isolated():
+def test_live_store_serializes_search_timeline_and_isolates_reads():
     game = DotsGame(2, 2)
-    published = publish_state(
+    root = TwoPlayerMCTSNode(game)
+    search = MonteCarloTreeSearch(root, random_seed=123)
+    selected = search.best_action(simulations_number=4)
+    store = LiveGameStore()
+    initial = store.start(
         game,
-        last_move=None,
-        move_number=0,
-        message="Initial state",
+        simulation_seconds=None,
+        simulations_number=4,
+        rollout_batch_size=1,
     )
-    version = published["version"]
+    published = store.publish(
+        state=game,
+        root=root,
+        selected_action=selected.action,
+        search_stats=search.last_search_stats,
+        resulting_state=selected.state,
+        move_number=1,
+        message="Move complete",
+    )
 
-    game.board[0, 0] = PLAYER_1
-    published["board"][0][1] = PLAYER_2
-    stored = snapshot_store.read()
+    initial["current_frame"]["board"][0][0] = PLAYER_2
+    published["analysis"]["timeline"][0]["selected_action"][0] = 99
+    stored = store.read()
 
-    assert stored["version"] == version
-    assert stored["board"] == [[0, 0], [0, 0]]
-    assert stored["legal_moves"] == [[0, 0], [0, 1], [1, 0], [1, 1]]
-    assert stored["game_over"] is False
-    assert stored["winner"] is None
-    assert stored["capture_player"] is None
+    assert stored["revision"] == initial["revision"] + 1
+    assert stored["analysis"]["frame_count"] == 1
+    assert stored["analysis"]["timeline"][0]["selected_action"] == list(
+        selected.action
+    )
+    assert store.frame(0)["board"] == [[0, 0], [0, 0]]
+    row, col = selected.action
+    assert stored["current_frame"]["board"][row][col] == PLAYER_1
+    assert stored["status"] == "searching"
 
 
-def test_snapshot_and_message_credit_a_surrounded_move_to_the_opponent():
+def test_message_credits_a_surrounded_move_to_the_opponent():
     game = DotsGame(5, 5)
     center = (2, 2)
     for cell in [(1, 2), (2, 1), (2, 3), (3, 2)]:
         game.place_dot(*cell, PLAYER_1)
     game.place_dot(*center, PLAYER_2)
 
-    published = publish_state(
-        game,
-        last_move=center,
-        move_number=5,
-        message=move_message(game, center, PLAYER_2),
-    )
+    message = move_message(game, center, PLAYER_2)
 
-    assert published["capture_player"] == PLAYER_1
-    assert published["last_captured_dots"] == [[2, 2]]
-    assert "Player 1 captured 1 trapped dot" in published["message"]
+    assert game.last_capture_player == PLAYER_1
+    assert center in game.last_captured_dots
+    assert "Player 1 captured 1 trapped dot" in message
 
 
-def test_snapshot_store_is_thread_safe_and_versions_every_publish():
-    store = SnapshotStore()
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        published = list(executor.map(lambda value: store.publish({"value": value}), range(40)))
-
-    assert sorted(snapshot["version"] for snapshot in published) == list(range(1, 41))
-    latest = store.read()
-    latest["value"] = "changed outside the store"
-    assert store.read()["value"] != "changed outside the store"
-
-
-def test_display_server_has_no_mutating_game_routes():
+def test_live_server_uses_shared_gui_and_has_no_mutating_game_routes():
+    client = TestClient(app)
     methods_by_path = {
         route.path: route.methods
         for route in app.routes
         if hasattr(route, "methods")
     }
 
-    assert methods_by_path["/api/state"] == {"GET"}
+    assert methods_by_path["/api/runtime"] == {"GET"}
+    assert methods_by_path["/api/live"] == {"GET"}
+    assert methods_by_path["/api/live/frames/{frame_index}"] == {"GET"}
     assert "/api/move" not in methods_by_path
     assert "/api/reset" not in methods_by_path
     assert "/api/mcts/step" not in methods_by_path
+    assert client.get("/api/runtime").json() == {"mode": "live"}
+    assert "Decision timeline" in client.get("/").text
+    assert "refreshLiveGame" in client.get("/assets/analysis.js").text
+    assert client.get("/game.js").status_code == 404
+    assert client.get("/styles.css").status_code == 404
 
 
 def test_main_loop_publishes_the_action_selected_by_mcts():
     publications = []
 
-    def collect(game, last_move, move_number, message):
-        publications.append((game.copy(), last_move, move_number, message))
+    def collect(**publication):
+        publications.append(publication)
 
     final_state = run_mcts_game(
         DotsGame(1, 1),
@@ -333,11 +340,12 @@ def test_main_loop_publishes_the_action_selected_by_mcts():
 
     assert final_state.game_result == 0
     assert len(publications) == 1
-    published_state, action, move_number, message = publications[0]
-    assert action == (0, 0)
-    assert published_state.board[action] == PLAYER_1
-    assert move_number == 1
-    assert "Game over: Draw" in message
+    publication = publications[0]
+    assert publication["selected_action"] == (0, 0)
+    assert publication["state"].board[0, 0] == EMPTY
+    assert publication["resulting_state"].board[0, 0] == PLAYER_1
+    assert publication["move_number"] == 1
+    assert "Game over: Draw" in publication["message"]
 
 
 if __name__ == "__main__":

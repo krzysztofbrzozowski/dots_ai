@@ -330,7 +330,7 @@ def test_analysis_api_runs_a_disposable_experiment_step():
     assert started.status_code == 201
     assert started.json()["source_move_number"] == 1
     assert started.json()["status"] == "ready"
-    assert started.json()["search"]["uct_c_param"] == 1.4
+    assert started.json()["search"]["uct_c_param"] == 0.8
     assert started.json()["frames"] == []
 
     step = client.post(f"/api/analyses/{analysis_id}/experiment/step")
@@ -386,6 +386,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     script = client.get("/assets/analysis.js")
     renderer = client.get("/shared/board_renderer.js")
     health = client.get("/api/health")
+    runtime = client.get("/api/runtime")
 
     assert page.status_code == 200
     assert "Decision timeline" in page.text
@@ -418,6 +419,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert 'this.overlay !== "none"' in renderer.text
     assert renderer.headers["cache-control"] == "no-store"
     assert health.json() == {"status": "ready"}
+    assert runtime.json() == {"mode": "analysis"}
 
 
 def test_print_t_publishes_messages_to_the_gui_diagnostic_stream():

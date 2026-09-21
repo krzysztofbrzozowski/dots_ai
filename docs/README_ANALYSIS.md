@@ -1,9 +1,9 @@
 # Saved-game analysis GUI
 
-`main_analysis.py` runs a local, read-only application for inspecting the NPZ
-files written after MCTS self-play games. It is independent from
-`main_mcts.py`: neither application imports the other, and both may run at the
-same time.
+`main_analysis.py` runs the saved-file mode of the shared MCTS workspace. It
+inspects NPZ files written after self-play games. `main_mcts.py` serves the same
+HTML, CSS, JavaScript, and board renderer in live mode; the Python servers and
+their in-memory data stores remain separate, so both can run at the same time.
 
 ## Running the analyzer
 
@@ -149,6 +149,7 @@ terminal board with the current game engine.
 
 | Endpoint | Purpose |
 | --- | --- |
+| `GET /api/runtime` | Select saved-analysis mode in the shared frontend |
 | `POST /api/analyses` | Validate an uploaded NPZ and create a local session |
 | `GET /api/analyses/{id}` | Read game metadata and timeline descriptors |
 | `GET /api/analyses/{id}/frames/{index}` | Read one canonical decision frame |

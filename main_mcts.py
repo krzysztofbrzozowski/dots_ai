@@ -1,4 +1,4 @@
-"""Run an MCTS-vs-MCTS Dots game and publish it to the read-only GUI."""
+"""Run an MCTS-vs-MCTS Dots game and publish it to the shared GUI."""
 
 import os
 import time
@@ -10,7 +10,7 @@ from threading import Thread
 import uvicorn
 
 from GUI.presentation import move_message
-from GUI.server import app, publish_state
+from GUI.server import app, initialize_live_game, publish_search
 from game.enclosure import DotsGame
 from mcts.enclosure import MonteCarloTreeSearch, TwoPlayerMCTSNode, rollout_state
 from training import SelfPlayTrajectory
@@ -31,7 +31,7 @@ def run_mcts_game(
     board_state,
     simulations_number=DEFAULT_SIMULATIONS,
     move_delay=DEFAULT_MOVE_DELAY,
-    publisher=publish_state,
+    publisher=publish_search,
     simulation_seconds=SIMULATION_SECONDS,
     rollout_executor=None,
     rollout_batch_size=1,
@@ -97,14 +97,17 @@ def run_mcts_game(
                 search_stats=stats,
             )
 
-        board_state = best_node.state
         move_number += 1
         publisher(
-            board_state,
-            last_move=best_node.action,
+            state=board_state,
+            root=root,
+            selected_action=best_node.action,
+            search_stats=stats,
+            resulting_state=best_node.state,
             move_number=move_number,
-            message=move_message(board_state, best_node.action, moving_player),
+            message=move_message(best_node.state, best_node.action, moving_player),
         )
+        board_state = best_node.state
 
         if move_delay and board_state.game_result is None:
             time.sleep(move_delay)
@@ -127,7 +130,7 @@ def run_parallel_mcts_game(
     board_state,
     simulations_number=DEFAULT_SIMULATIONS,
     move_delay=DEFAULT_MOVE_DELAY,
-    publisher=publish_state,
+    publisher=publish_search,
     simulation_seconds=SIMULATION_SECONDS,
     workers=DEFAULT_MCTS_WORKERS,
     training_data_directory=None,
@@ -202,11 +205,11 @@ def run_parallel_mcts_game(
 def main():
     # Initial board state
     board_state = DotsGame(ROWS, COLS)
-    publish_state(
+    initialize_live_game(
         board_state,
-        last_move=None,
-        move_number=0,
-        message="MCTS game ready. Player 1 is searching.",
+        simulation_seconds=SIMULATION_SECONDS,
+        simulations_number=DEFAULT_SIMULATIONS,
+        rollout_batch_size=DEFAULT_MCTS_WORKERS,
     )
 
     # Pararell thread for the game

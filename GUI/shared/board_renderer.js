@@ -433,15 +433,17 @@ export class DotsBoardRenderer {
   drawSelectionMarkers() {
     const { step, originX, originY } = this.layout;
     const markerRadius = Math.max(9, Math.min(19, step * 0.38));
-    const [selectedRow, selectedCol] = this.frame.selected_action;
-    const actionX = originX + selectedCol * step;
-    const actionY = originY + selectedRow * step;
+    if (this.frame.selected_action) {
+      const [selectedRow, selectedCol] = this.frame.selected_action;
+      const actionX = originX + selectedCol * step;
+      const actionY = originY + selectedRow * step;
 
-    this.context.strokeStyle = cssColor("--selected-action");
-    this.context.lineWidth = 3;
-    this.context.beginPath();
-    this.context.arc(actionX, actionY, markerRadius + 3, 0, Math.PI * 2);
-    this.context.stroke();
+      this.context.strokeStyle = cssColor("--selected-action");
+      this.context.lineWidth = 3;
+      this.context.beginPath();
+      this.context.arc(actionX, actionY, markerRadius + 3, 0, Math.PI * 2);
+      this.context.stroke();
+    }
 
     if (!this.selectedCell) return;
     const [row, col] = this.selectedCell;
