@@ -17,7 +17,7 @@ MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "25x25_088622_human_sgf_dual_head_v1.keras"
+    / "25x25_088622_new_data_dual_head_v1.keras"
 )
 # --- END PATHS AND SETTINGS
 
@@ -170,7 +170,14 @@ def predict_policy(model, state):
     excluded before a numerically stable softmax, so the returned legal
     probabilities sum to one and every illegal cell is exactly zero.
     """
+    # Get the policy head predictions
     predictions = _predict_outputs(model, state)
+    # returns
+    # predictions['policy'] -> array[[2.8634408, 0.24973416, -1.2134645, -0.7428496, ...]]
+    # ...
+    # predictions['value'] -> array[[[0.36447012, 0.045201804, 0.5903281]]
+    # ...
+    # GET THE VALUES ONLY FOR policy FROM predictions
     logits = np.asarray(
         _named_model_output(model, predictions, "policy")
     )[0]
@@ -179,14 +186,24 @@ def predict_policy(model, state):
         raise ValueError(
             f"Model must return {action_count} finite policy logits"
         )
-
+    # Create logical mask from lega/possible moves -> before: (25, 25) -> reshape(-1) -> after: (625,)
     legal_mask = ((state.board == 0) & (state.territory == 0)).reshape(-1)
     if not np.any(legal_mask):
         raise ValueError("Cannot predict policy for a position without legal moves")
 
+    # NumPy boolean masking/indexing
     legal_logits = logits[legal_mask]
+    # Converts legal-move logits into positive weights
+    # Subtracting the maximum prevents numerical overflow 
+    # when calculating the exponential function
     legal_exponentials = np.exp(legal_logits - np.max(legal_logits))
+
+    # Creates a zero-filled vector with one entry for every possible board action
     probabilities = np.zeros(action_count, dtype=np.float32)
+
+    # Normalizes the legal moves weights (legal_expotentials) into probabilities
+    # and assigns them only to legal-action positions
+    # Probabilities sum = 1
     probabilities[legal_mask] = legal_exponentials / legal_exponentials.sum()
     policy_map = probabilities.reshape(state.board.shape)
 

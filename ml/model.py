@@ -7,7 +7,7 @@ from keras import layers
 def build_dual_head_model(
     board_shape,
     *,
-    name="dots_dual_head_human_sgf_v1",
+    name="dots_dual_head_new_data_v1",
 ):
     """Build the existing four-block model for a specific board shape."""
 

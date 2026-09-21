@@ -219,11 +219,13 @@ def create_app(store=None, predictor=None, experiment_manager=None):
                 frame_index,
             )
             elapsed_ms = (perf_counter() - started_at) * 1000
-            top_move = prediction["top_moves"][0]
+            top_moves = " · ".join(
+                f"{tuple(move['coordinate'])} {move['probability']:.1%}"
+                for move in prediction["top_moves"][:5]
+            )
             PRINT_T(
                 f"{prediction['model']} · frame {frame_index + 1} · "
-                f"policy top {tuple(top_move['coordinate'])} "
-                f"{top_move['probability']:.1%} · {elapsed_ms:.1f} ms",
+                f"policy top5 {top_moves} · {elapsed_ms:.1f} ms",
                 level="success",
                 source="MODEL",
             )

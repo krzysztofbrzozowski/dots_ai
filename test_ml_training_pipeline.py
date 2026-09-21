@@ -8,7 +8,11 @@ import numpy as np
 import tensorflow as tf
 
 from game.enclosure import DotsGame
-from ml.data_loader import game_to_samples, policy_targets_for_game
+from ml.data_loader import (
+    count_game_positions,
+    game_to_samples,
+    policy_targets_for_game,
+)
 from ml.model import build_dual_head_model
 from ml.predictor import (
     analysis_frame_to_game_state,
@@ -49,7 +53,7 @@ def _write_human_game(path, actions):
         legal_masks=np.ones((frame_count, 2, 2), dtype=np.uint8),
         selected_actions=np.asarray(actions, dtype=np.int16),
         final_result=np.asarray(1, dtype=np.int8),
-        data_source=np.asarray("human_sgf"),
+        data_source=np.asarray("new_data"),
         has_mcts_policy=np.asarray(False),
     )
 
@@ -78,7 +82,7 @@ def test_training_and_prediction_use_matching_board_and_scalar_score_inputs():
 
 
 def test_human_policy_uses_selected_actions_as_weighted_one_hot_targets():
-    game = _policy_game("human_sgf")
+    game = _policy_game("new_data")
 
     targets, weights = policy_targets_for_game(game, (2, 2))
 
@@ -120,15 +124,22 @@ def test_streaming_dataset_loads_games_concurrently_and_batches_positions():
         second_path = directory / "second.npz"
         _write_human_game(first_path, [[0, 0], [0, 1]])
         _write_human_game(second_path, [[1, 0], [1, 1], [0, 0]])
+        position_count = count_game_positions(
+            [first_path, second_path],
+            worker_count=2,
+        )
 
         dataset = streaming_dual_head_npz_dataset(
             [first_path, second_path],
             board_shape=(2, 2),
             batch_size=3,
+            position_count=position_count,
             file_workers=2,
         )
         batches = list(dataset.as_numpy_iterator())
 
+    assert position_count == 5
+    assert int(tf.data.experimental.cardinality(dataset).numpy()) == 2
     assert [len(inputs[0]) for inputs, _, _ in batches] == [3, 2]
     assert sum(len(inputs[0]) for inputs, _, _ in batches) == 5
     for inputs, targets, weights in batches:

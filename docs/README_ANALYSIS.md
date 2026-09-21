@@ -46,7 +46,7 @@ The center board renders the state before the selected move. Seven board modes
 are available:
 
 - **Head value** — click a legal move to evaluate the position after that move
-  with `25x25_088622_human_sgf_dual_head_v1.keras`;
+  with `25x25_088622_new_data_dual_head_v1.keras`;
 - **Policy head** — show the dual-head model's probability for every legal move
   in the current position;
 - **Q / N** — the mean rollout result from the current player's perspective;

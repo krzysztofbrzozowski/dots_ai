@@ -144,6 +144,7 @@ def streaming_dual_head_npz_dataset(
     board_shape,
     batch_size,
     *,
+    position_count=None,
     shuffle=False,
     seed=None,
     shuffle_buffer_size=16_384,
@@ -176,6 +177,12 @@ def streaming_dual_head_npz_dataset(
         raise ValueError("file_workers must be a positive integer")
     if shuffle and shuffle_buffer_size <= 0:
         raise ValueError("shuffle_buffer_size must be positive when shuffling")
+    if position_count is not None and (
+        not isinstance(position_count, int)
+        or isinstance(position_count, bool)
+        or position_count <= 0
+    ):
+        raise ValueError("position_count must be a positive integer")
 
     rows, columns = board_shape
     action_count = rows * columns
@@ -219,9 +226,13 @@ def streaming_dual_head_npz_dataset(
             seed=seed,
             reshuffle_each_iteration=True,
         )
-    return dataset.batch(batch_size, drop_remainder=False).prefetch(
-        tf.data.AUTOTUNE
-    )
+    dataset = dataset.batch(batch_size, drop_remainder=False)
+    if position_count is not None:
+        batch_count = math.ceil(position_count / batch_size)
+        dataset = dataset.apply(
+            tf.data.experimental.assert_cardinality(batch_count)
+        )
+    return dataset.prefetch(tf.data.AUTOTUNE)
 
 
 def d4_symmetries(samples):

@@ -16,13 +16,13 @@ from mcts.enclosure import MonteCarloTreeSearch, TwoPlayerMCTSNode, rollout_stat
 from training import SelfPlayTrajectory
 
 
-ROWS = 10
-COLS = 10
+ROWS = 25
+COLS = 25
 DEFAULT_SIMULATIONS = 12
 DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
-SIMULATION_SECONDS = 30
+SIMULATION_SECONDS = 120
 DEFAULT_MCTS_WORKERS = os.cpu_count()
 TRAINING_DATA_DIRECTORY = Path(__file__).resolve().parent / "training_data"
 

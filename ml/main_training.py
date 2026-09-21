@@ -1,4 +1,4 @@
-"""Train the 25x25 dual-head model from filtered Zagram games."""
+"""Train the 25x25 dual-head model from filtered new_data games."""
 
 from pathlib import Path
 import sys
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from ml.data_loader import split_game_paths
+from ml.data_loader import count_game_positions, split_game_paths
 from ml.model import build_dual_head_model, compile_dual_head_model
 from ml.training_pipeline import streaming_dual_head_npz_dataset
 
@@ -18,7 +18,7 @@ from ml.training_pipeline import streaming_dual_head_npz_dataset
 DATA_DIRECTORY = (
     PROJECT_ROOT
     / "training_data"
-    / "zagram"
+    / "new_data"
     / "npz"
     / "25x25_filtered"
 )
@@ -26,13 +26,13 @@ MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "25x25_088622_human_sgf_dual_head_v1.keras"
+    / "25x25_088622_new_data_dual_head_v1.keras"
 )
 HISTORY_PATH = (
     PROJECT_ROOT
     / "docs"
     / "imgs"
-    / "training_history_25x25_088622_human_sgf_dual_head_v1.png"
+    / "training_history_25x25_088622_new_data_dual_head_v1.png"
 )
 
 BOARD_SHAPE = (25, 25)
@@ -46,7 +46,7 @@ FILE_WORKERS = 13
 # The machine has 48 GB of unified memory. About 30 GiB of training tensors,
 # together with the model, TensorFlow, and macOS allocations, should place the
 # observed total near 42-45 GB without changing the optimizer batch size.
-SHUFFLE_BUFFER_MEMORY_GIB = 35
+SHUFFLE_BUFFER_MEMORY_GIB = 32
 BYTES_PER_POSITION = (
     BOARD_SHAPE[0] * BOARD_SHAPE[1] * 5 * 4
     + 2 * 4
@@ -80,10 +80,31 @@ def create_datasets():
         f"(~{SHUFFLE_BUFFER_MEMORY_GIB} GiB tensor payload)"
     )
 
+    print("Counting positions for exact epoch progress...")
+    training_position_count = count_game_positions(
+        training_paths,
+        worker_count=FILE_WORKERS,
+    )
+    validation_position_count = count_game_positions(
+        validation_paths,
+        worker_count=FILE_WORKERS,
+    )
+    test_position_count = count_game_positions(
+        test_paths,
+        worker_count=FILE_WORKERS,
+    )
+    print(
+        "Position split: "
+        f"{training_position_count:,} training, "
+        f"{validation_position_count:,} validation, "
+        f"{test_position_count:,} test"
+    )
+
     training_dataset = streaming_dual_head_npz_dataset(
         training_paths,
         BOARD_SHAPE,
         BATCH_SIZE,
+        position_count=training_position_count,
         shuffle=True,
         seed=DATA_SEED,
         shuffle_buffer_size=SHUFFLE_BUFFER_SIZE,
@@ -93,12 +114,14 @@ def create_datasets():
         validation_paths,
         BOARD_SHAPE,
         BATCH_SIZE,
+        position_count=validation_position_count,
         file_workers=FILE_WORKERS,
     )
     test_dataset = streaming_dual_head_npz_dataset(
         test_paths,
         BOARD_SHAPE,
         BATCH_SIZE,
+        position_count=test_position_count,
         file_workers=FILE_WORKERS,
     )
     return training_dataset, validation_dataset, test_dataset

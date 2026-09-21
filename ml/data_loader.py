@@ -1,5 +1,6 @@
 """Load saved games as value-only or policy/value training samples."""
 
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 import numpy as np
@@ -155,9 +156,57 @@ def load_streaming_game(path):
             if name in stored.files:
                 game[name] = stored[name].copy()
         data_source = str(np.asarray(game.get("data_source", "")).item())
-        if data_source != "human_sgf" and "visit_counts" in stored.files:
+        if data_source != "new_data" and "visit_counts" in stored.files:
             game["visit_counts"] = stored["visit_counts"].copy()
     return game
+
+
+def _position_count(path):
+    """Read the number of saved positions without loading board tensors."""
+
+    with np.load(path, allow_pickle=False) as stored:
+        if "next_players" not in stored.files:
+            raise ValueError(f"{Path(path).name} is missing next_players")
+        return len(stored["next_players"])
+
+
+def count_game_positions(game_paths, worker_count=4):
+    """Count positions across NPZ games with bounded parallel file access."""
+
+    paths = tuple(Path(path) for path in game_paths)
+    if not paths:
+        raise ValueError("game_paths cannot be empty")
+    if (
+        not isinstance(worker_count, int)
+        or isinstance(worker_count, bool)
+        or worker_count <= 0
+    ):
+        raise ValueError("worker_count must be a positive integer")
+
+    path_iterator = iter(paths)
+    total = 0
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        pending = set()
+
+        def submit_next():
+            try:
+                path = next(path_iterator)
+            except StopIteration:
+                return False
+            pending.add(executor.submit(_position_count, path))
+            return True
+
+        for _ in range(worker_count * 2):
+            if not submit_next():
+                break
+
+        while pending:
+            completed, pending = wait(pending, return_when=FIRST_COMPLETED)
+            for future in completed:
+                total += future.result()
+                submit_next()
+
+    return total
 
 
 def split_game_paths(directory, validation_fraction=0.2, seed=42, test_fraction=0.0):
@@ -243,7 +292,7 @@ def policy_targets_for_game(game, board_shape):
     policy_weights = np.zeros(frame_count, dtype=np.float32)
     data_source = str(np.asarray(game.get("data_source", "")).item())
 
-    if data_source == "human_sgf":
+    if data_source == "new_data":
         selected_actions = np.asarray(game["selected_actions"])
         if selected_actions.shape != (frame_count, 2):
             raise ValueError("human selected actions do not match policy samples")
@@ -310,7 +359,7 @@ def load_dual_head_game_samples(path):
 def load_policy_targets(game_paths, expected_sample_count, board_shape):
     """Return human one-hot or normalized MCTS policy targets and weights.
 
-    Human SGF positions use the selected action with weight one. Other games
+    New data positions use the selected action with weight one. Other games
     use normalized legal MCTS visits. A zero weight marks a position without
     either target, such as a random opening without search statistics.
     """
