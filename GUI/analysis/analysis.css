@@ -1806,6 +1806,17 @@ kbd {
   .local-badge {
     display: none;
   }
+  .analysis-actions {
+    gap: 7px;
+  }
+  .screenshot-actions {
+    gap: 4px;
+  }
+  .screenshot-button {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
   .file-button span {
     padding-inline: 11px;
     font-size: 11px;

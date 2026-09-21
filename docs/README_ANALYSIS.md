@@ -29,6 +29,11 @@ action, and the currently selected cell. The board is rendered directly into
 the square with a comfortable inset similar to the analysis view, without
 stretching the grid.
 
+The adjacent panel button exports the complete analysis card: heading, board,
+legend, search summary, selected-cell metrics, a six-row top-moves comparison,
+and the visible model-head panel. The disposable forced-replay controls are
+omitted from this report-style PNG.
+
 ## What the interface shows
 
 The analysis workspace pairs an off-white page and header with dark plum board

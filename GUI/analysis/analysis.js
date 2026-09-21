@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260921-policy-split";
+} from "/shared/board_renderer.js?v=20260921-panel-export";
 
 
 const elements = {
@@ -16,7 +16,6 @@ const elements = {
   dropTarget: document.querySelector("#drop-target"),
   dropOverlay: document.querySelector("#drop-overlay"),
   workspace: document.querySelector(".workspace"),
-  boardPanel: document.querySelector(".board-panel"),
   gameTitle: document.querySelector("#game-title"),
   gameSubtitle: document.querySelector("#game-subtitle"),
   summaryBoard: document.querySelector("#summary-board"),
@@ -416,12 +415,13 @@ function safeFileStem(fileName) {
 }
 
 
-function screenshotFileName() {
+function screenshotFileName(kind = "board") {
   const game = safeFileStem(view.analysis?.file_name || "dots-analysis");
   const move = view.frame?.move_number || view.frameIndex + 1;
   const selected = view.selectedCell || view.frame?.selected_action;
   const cell = selected ? `-r${selected[0]}-c${selected[1]}` : "";
-  return `${game}-move-${move}-${view.overlay}${cell}.png`;
+  const suffix = kind === "panel" ? "analysis-panel" : view.overlay;
+  return `${game}-move-${move}-${suffix}${cell}.png`;
 }
 
 
@@ -436,8 +436,508 @@ function canvasToPngBlob(canvas) {
 
 
 function updateScreenshotAvailability() {
-  elements.screenshotButton.disabled =
-    !view.frame || view.importing || view.screenshotting;
+  const disabled = !view.frame || view.importing || view.screenshotting;
+  elements.screenshotButton.disabled = disabled;
+  elements.panelScreenshotButton.disabled = disabled;
+}
+
+
+function downloadPngBlob(blob, fileName) {
+  const objectUrl = URL.createObjectURL(blob);
+  const download = document.createElement("a");
+  download.href = objectUrl;
+  download.download = fileName;
+  document.body.append(download);
+  download.click();
+  download.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+
+function exportColor(name) {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+}
+
+
+function fittedCanvasText(context, value, maximumWidth) {
+  const text = String(value ?? "");
+  if (context.measureText(text).width <= maximumWidth) return text;
+  let shortened = text;
+  while (
+    shortened.length > 1 &&
+    context.measureText(`${shortened}…`).width > maximumWidth
+  ) {
+    shortened = shortened.slice(0, -1);
+  }
+  return `${shortened}…`;
+}
+
+
+function drawRoundedBox(context, x, y, width, height, options = {}) {
+  const { fill, stroke, radius = 8, lineWidth = 1 } = options;
+  context.beginPath();
+  context.roundRect(x, y, width, height, radius);
+  if (fill) {
+    context.fillStyle = fill;
+    context.fill();
+  }
+  if (stroke) {
+    context.strokeStyle = stroke;
+    context.lineWidth = lineWidth;
+    context.stroke();
+  }
+}
+
+
+function drawCanvasText(
+  context,
+  value,
+  x,
+  y,
+  { color, font, align = "left", maximumWidth = Number.POSITIVE_INFINITY } = {},
+) {
+  if (color) context.fillStyle = color;
+  if (font) context.font = font;
+  context.textAlign = align;
+  context.textBaseline = "alphabetic";
+  context.fillText(
+    fittedCanvasText(context, value, maximumWidth),
+    x,
+    y,
+  );
+}
+
+
+function metricItems(container) {
+  return [...container.children]
+    .filter((child) => !child.classList.contains("inspector-heading"))
+    .map((child) => ({
+      label: child.querySelector("span")?.textContent || "",
+      value: child.querySelector("strong")?.textContent || "—",
+    }));
+}
+
+
+function drawMetricStrip(
+  context,
+  items,
+  weights,
+  x,
+  y,
+  width,
+  height,
+  colors,
+  { boxed = true } = {},
+) {
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  let cursor = x;
+  items.forEach((item, index) => {
+    const itemWidth = index === items.length - 1
+      ? x + width - cursor
+      : width * weights[index] / totalWeight;
+    if (boxed) {
+      context.fillStyle = colors.surfaceSoft;
+      context.fillRect(cursor, y, itemWidth, height);
+      if (index > 0) {
+        context.fillStyle = colors.border;
+        context.fillRect(cursor, y, 1, height);
+      }
+    }
+    drawCanvasText(context, item.label.toUpperCase(), cursor + 11, y + 18, {
+      color: colors.textTertiary,
+      font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+      maximumWidth: itemWidth - 20,
+    });
+    drawCanvasText(context, item.value, cursor + 11, y + 41, {
+      color: index === 0 ? colors.selected : colors.textPrimary,
+      font: "500 11px ui-monospace, SFMono-Regular, Menlo, monospace",
+      maximumWidth: itemWidth - 20,
+    });
+    cursor += itemWidth;
+  });
+}
+
+
+function drawTopMovesTable(context, x, y, width, colors) {
+  const rows = [...elements.moveComparisonBody.querySelectorAll("tr")];
+  const headerHeight = 35;
+  const columnsHeight = 27;
+  const rowHeight = 29;
+  const height = headerHeight + columnsHeight + rows.length * rowHeight;
+  const columnWeights = [1.3, 1, 1, 1, 1, 1.2];
+  const columnTotal = columnWeights.reduce((sum, weight) => sum + weight, 0);
+  const headings = ["Move", "Prior P", "Q / N", "Visits N", "MCTS π", "Ranks P → π"];
+
+  drawRoundedBox(context, x, y, width, height, {
+    fill: colors.surfaceSoft,
+    stroke: colors.border,
+    radius: 8,
+  });
+  drawCanvasText(context, "−", x + 12, y + 22, {
+    color: colors.accent,
+    font: "10px ui-monospace, SFMono-Regular, Menlo, monospace",
+  });
+  drawCanvasText(context, "Top moves · model → search", x + 31, y + 22, {
+    color: colors.textPrimary,
+    font: "9px ui-monospace, SFMono-Regular, Menlo, monospace",
+  });
+  drawCanvasText(context, elements.moveComparisonNote.textContent, x + width - 12, y + 22, {
+    color: colors.textTertiary,
+    font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+    align: "right",
+    maximumWidth: width * 0.45,
+  });
+
+  context.fillStyle = colors.border;
+  context.fillRect(x, y + headerHeight, width, 1);
+  let cursor = x;
+  headings.forEach((heading, index) => {
+    const columnWidth = width * columnWeights[index] / columnTotal;
+    const align = index === 0 ? "left" : "right";
+    drawCanvasText(
+      context,
+      heading.toUpperCase(),
+      align === "left" ? cursor + 10 : cursor + columnWidth - 10,
+      y + headerHeight + 18,
+      {
+        color: colors.textTertiary,
+        font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+        align,
+        maximumWidth: columnWidth - 18,
+      },
+    );
+    cursor += columnWidth;
+  });
+
+  rows.forEach((row, rowIndex) => {
+    const rowY = y + headerHeight + columnsHeight + rowIndex * rowHeight;
+    if (row.classList.contains("is-selected")) {
+      context.fillStyle = "rgba(243, 217, 160, 0.055)";
+      context.fillRect(x + 1, rowY, width - 2, rowHeight);
+    }
+    context.fillStyle = colors.border;
+    context.fillRect(x, rowY, width, 1);
+    const values = [...row.querySelectorAll("td")].map(
+      (cell) => cell.textContent.trim()
+    );
+    let valueX = x;
+    values.forEach((value, index) => {
+      const columnWidth = width * columnWeights[index] / columnTotal;
+      const align = index === 0 ? "left" : "right";
+      drawCanvasText(
+        context,
+        value,
+        align === "left" ? valueX + 10 : valueX + columnWidth - 10,
+        rowY + 19,
+        {
+          color: row.classList.contains("is-selected")
+            ? colors.selected
+            : index === 0 ? colors.accent : colors.textPrimary,
+          font: "9px ui-monospace, SFMono-Regular, Menlo, monospace",
+          align,
+          maximumWidth: columnWidth - 18,
+        },
+      );
+      valueX += columnWidth;
+    });
+  });
+  return height;
+}
+
+
+function drawModelPanel(context, panel, x, y, width, colors) {
+  if (!panel) return 0;
+  const height = 92;
+  drawRoundedBox(context, x, y, width, height, {
+    fill: colors.surfaceRaised,
+    stroke: colors.borderStrong,
+    radius: 9,
+  });
+  drawCanvasText(context, panel.querySelector(".eyebrow")?.textContent, x + 14, y + 22, {
+    color: colors.playerOne,
+    font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+  });
+  drawCanvasText(context, panel.querySelector("h3")?.textContent, x + 14, y + 43, {
+    color: colors.textPrimary,
+    font: "600 13px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    maximumWidth: 340,
+  });
+  drawCanvasText(
+    context,
+    panel.querySelector(".head-value-message")?.textContent,
+    x + 14,
+    y + 69,
+    {
+      color: colors.textSecondary,
+      font: "10px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+      maximumWidth: 410,
+    },
+  );
+
+  const resultItems = metricItems(panel.querySelector(".head-value-results"));
+  const resultsX = x + 440;
+  const resultsWidth = width - 454;
+  drawRoundedBox(context, resultsX, y + 12, resultsWidth, 68, {
+    fill: colors.surfaceSoft,
+    stroke: colors.border,
+    radius: 7,
+  });
+  drawMetricStrip(
+    context,
+    resultItems,
+    resultItems.map(() => 1),
+    resultsX,
+    y + 12,
+    resultsWidth,
+    68,
+    colors,
+    { boxed: false },
+  );
+  return height;
+}
+
+
+async function renderCompletePanelCanvas() {
+  if (document.fonts?.ready) await document.fonts.ready;
+  const visibleModelPanel = [elements.headValuePanel, elements.headPolicyPanel]
+    .find((panel) => !panel.hidden);
+  const topMoveRows = elements.moveComparisonBody.querySelectorAll("tr").length;
+  const tableHeight = 35 + 27 + topMoveRows * 29;
+  const panelHeight = 884 + tableHeight + (visibleModelPanel ? 129 : 22);
+  const scale = 2;
+  const output = document.createElement("canvas");
+  output.width = PANEL_EXPORT_WIDTH * scale;
+  output.height = panelHeight * scale;
+  const context = output.getContext("2d");
+  if (!context) throw new Error("The screenshot canvas is unavailable.");
+  context.scale(scale, scale);
+
+  const colors = {
+    surface: exportColor("--surface"),
+    surfaceRaised: exportColor("--surface-raised"),
+    surfaceSoft: exportColor("--surface-soft"),
+    border: exportColor("--border"),
+    borderStrong: exportColor("--border-strong"),
+    textPrimary: exportColor("--text-primary"),
+    textSecondary: exportColor("--text-secondary"),
+    textTertiary: exportColor("--text-tertiary"),
+    accent: exportColor("--accent"),
+    playerOne: exportColor("--player-one"),
+    playerTwo: exportColor("--player-two"),
+    selected: exportColor("--selected-action"),
+    unvisited: exportColor("--unvisited-action"),
+  };
+  drawRoundedBox(context, 0.5, 0.5, PANEL_EXPORT_WIDTH - 1, panelHeight - 1, {
+    fill: colors.surface,
+    stroke: colors.border,
+    radius: 16,
+  });
+
+  const padding = 22;
+  const contentWidth = PANEL_EXPORT_WIDTH - padding * 2;
+  drawCanvasText(context, "03 /  POSITION BEFORE MOVE", padding, 28, {
+    color: colors.playerOne,
+    font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+  });
+  drawCanvasText(context, elements.boardTitle.textContent, padding, 53, {
+    color: colors.textPrimary,
+    font: "600 17px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  });
+
+  const overlayButtons = [...elements.overlaySwitcher.querySelectorAll("button")];
+  context.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+  const overlayWidths = overlayButtons.map(
+    (button) => Math.ceil(context.measureText(button.textContent).width) + 20
+  );
+  const overlayWidth = overlayWidths.reduce((sum, width) => sum + width, 0) + 8;
+  const overlayX = PANEL_EXPORT_WIDTH - padding - overlayWidth;
+  drawRoundedBox(context, overlayX, 22, overlayWidth, 38, {
+    fill: colors.surfaceSoft,
+    stroke: colors.border,
+    radius: 8,
+  });
+  let overlayCursor = overlayX + 4;
+  overlayButtons.forEach((button, index) => {
+    const buttonWidth = overlayWidths[index];
+    if (button.classList.contains("is-active")) {
+      drawRoundedBox(context, overlayCursor, 26, buttonWidth, 30, {
+        fill: "rgba(121, 220, 232, 0.075)",
+        stroke: "rgba(121, 220, 232, 0.26)",
+        radius: 5,
+      });
+    }
+    drawCanvasText(
+      context,
+      button.textContent,
+      overlayCursor + buttonWidth / 2,
+      45,
+      {
+        color: button.classList.contains("is-active")
+          ? colors.accent
+          : colors.textSecondary,
+        font: "10px ui-monospace, SFMono-Regular, Menlo, monospace",
+        align: "center",
+      },
+    );
+    overlayCursor += buttonWidth;
+  });
+
+  const playerText = elements.playerPill.textContent;
+  const playerColor = elements.playerPill.classList.contains("player-one")
+    ? colors.playerOne
+    : colors.playerTwo;
+  const playerWidth = 116;
+  const playerX = overlayX - playerWidth - 12;
+  drawRoundedBox(context, playerX, 26, playerWidth, 30, {
+    fill: elements.playerPill.classList.contains("player-one")
+      ? "rgba(236, 139, 184, 0.14)"
+      : "rgba(121, 220, 232, 0.13)",
+    stroke: playerColor,
+    radius: 6,
+  });
+  context.fillStyle = playerColor;
+  context.beginPath();
+  context.arc(playerX + 12, 41, 3, 0, Math.PI * 2);
+  context.fill();
+  drawCanvasText(context, playerText, playerX + 21, 45, {
+    color: playerColor,
+    font: "10px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    maximumWidth: playerWidth - 27,
+  });
+
+  const boardY = 77;
+  const boardCanvas = boardRenderer.renderCanvas(
+    contentWidth,
+    PANEL_EXPORT_BOARD_HEIGHT,
+    2,
+  );
+  context.save();
+  context.beginPath();
+  context.roundRect(
+    padding,
+    boardY,
+    contentWidth,
+    PANEL_EXPORT_BOARD_HEIGHT,
+    10,
+  );
+  context.clip();
+  context.drawImage(
+    boardCanvas,
+    padding,
+    boardY,
+    contentWidth,
+    PANEL_EXPORT_BOARD_HEIGHT,
+  );
+  context.restore();
+  drawRoundedBox(context, padding, boardY, contentWidth, PANEL_EXPORT_BOARD_HEIGHT, {
+    stroke: colors.border,
+    radius: 10,
+  });
+
+  const legendY = boardY + PANEL_EXPORT_BOARD_HEIGHT + 22;
+  const legendItems = [
+    ["Player 1", colors.playerOne, "dot"],
+    ["Player 2", colors.playerTwo, "dot"],
+    ["Selected action", colors.selected, "ring"],
+    ["Unvisited legal action", colors.unvisited, "ring"],
+  ];
+  let legendX = padding;
+  for (const [label, color, type] of legendItems) {
+    context.beginPath();
+    context.arc(legendX + 4, legendY - 3, type === "dot" ? 3.5 : 4.5, 0, Math.PI * 2);
+    if (type === "dot") {
+      context.fillStyle = color;
+      context.fill();
+    } else {
+      context.strokeStyle = color;
+      context.lineWidth = 1.2;
+      context.stroke();
+    }
+    drawCanvasText(context, label, legendX + 13, legendY, {
+      color: colors.textSecondary,
+      font: "10px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    });
+    legendX += context.measureText(label).width + 31;
+  }
+  drawCanvasText(context, elements.overlayDescription.textContent, padding, legendY + 24, {
+    color: colors.textTertiary,
+    font: "9px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  });
+  const scaleX = PANEL_EXPORT_WIDTH - padding - 95;
+  drawCanvasText(context, elements.scaleLow.textContent, scaleX, legendY + 24, {
+    color: colors.textTertiary,
+    font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+  });
+  const gradient = context.createLinearGradient(scaleX + 28, 0, scaleX + 76, 0);
+  gradient.addColorStop(0, colors.border);
+  gradient.addColorStop(1, colors.accent);
+  context.fillStyle = gradient;
+  context.fillRect(scaleX + 28, legendY + 19, 48, 3);
+  drawCanvasText(context, elements.scaleHigh.textContent, scaleX + 83, legendY + 24, {
+    color: colors.textTertiary,
+    font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+  });
+
+  const summaryY = legendY + 39;
+  drawRoundedBox(context, padding, summaryY, contentWidth, 60, {
+    fill: colors.surfaceSoft,
+    stroke: colors.border,
+    radius: 8,
+  });
+  drawMetricStrip(
+    context,
+    metricItems(document.querySelector(".frame-summary")),
+    [1.6, 0.8, 1, 1, 1, 1],
+    padding,
+    summaryY,
+    contentWidth,
+    60,
+    colors,
+  );
+
+  const inspectorHeadingY = summaryY + 82;
+  drawCanvasText(context, "BOARD POSITION", padding, inspectorHeadingY, {
+    color: colors.playerOne,
+    font: "8px ui-monospace, SFMono-Regular, Menlo, monospace",
+  });
+  drawCanvasText(context, elements.cellTitle.textContent, padding + 104, inspectorHeadingY, {
+    color: colors.textSecondary,
+    font: "9px ui-monospace, SFMono-Regular, Menlo, monospace",
+    maximumWidth: 500,
+  });
+  drawMetricStrip(
+    context,
+    metricItems(document.querySelector(".cell-inspector")),
+    [1.35, 0.55, 1, 1, 1, 1.2, 1.5, 1],
+    padding,
+    inspectorHeadingY + 8,
+    contentWidth,
+    54,
+    colors,
+    { boxed: false },
+  );
+
+  const tableY = 884;
+  const renderedTableHeight = drawTopMovesTable(
+    context,
+    padding,
+    tableY,
+    contentWidth,
+    colors,
+  );
+  if (visibleModelPanel) {
+    drawModelPanel(
+      context,
+      visibleModelPanel,
+      padding,
+      tableY + renderedTableHeight + 15,
+      contentWidth,
+      colors,
+    );
+  }
+  return output;
 }
 
 
@@ -453,14 +953,7 @@ async function downloadSquareScreenshot() {
     const screenshot = boardRenderer.renderSquareCanvas(1600);
     const blob = await canvasToPngBlob(screenshot);
     const fileName = screenshotFileName();
-    const objectUrl = URL.createObjectURL(blob);
-    const download = document.createElement("a");
-    download.href = objectUrl;
-    download.download = fileName;
-    document.body.append(download);
-    download.click();
-    download.remove();
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    downloadPngBlob(blob, fileName);
 
     showStatus(`Saved ${fileName} as a 1:1 PNG.`);
     logDiagnostic(
@@ -476,7 +969,42 @@ async function downloadSquareScreenshot() {
   } finally {
     view.screenshotting = false;
     elements.screenshotButton.classList.remove("is-busy");
-    elements.screenshotButton.title = "Download square screenshot";
+    elements.screenshotButton.title = "Download board-only square screenshot";
+    updateScreenshotAvailability();
+  }
+}
+
+
+async function downloadCompletePanelScreenshot() {
+  if (!view.frame || view.screenshotting) return;
+
+  view.screenshotting = true;
+  elements.panelScreenshotButton.classList.add("is-busy");
+  elements.panelScreenshotButton.title = "Creating complete panel screenshot…";
+  updateScreenshotAvailability();
+
+  try {
+    const screenshot = await renderCompletePanelCanvas();
+    const blob = await canvasToPngBlob(screenshot);
+    const fileName = screenshotFileName("panel");
+    downloadPngBlob(blob, fileName);
+    showStatus(`Saved ${fileName} with the complete analysis panel.`);
+    logDiagnostic(
+      `complete panel screenshot · frame ${view.frameIndex + 1} · ` +
+        `${view.overlay} overlay · ${screenshot.width} × ${screenshot.height} PNG`,
+      { level: "success", source: "EXPORT" },
+    );
+  } catch (error) {
+    showStatus(error.message || "Could not save the panel screenshot.", "error");
+    logDiagnostic(
+      error.message || "Could not save the panel screenshot.",
+      { level: "error", source: "EXPORT" },
+    );
+  } finally {
+    view.screenshotting = false;
+    elements.panelScreenshotButton.classList.remove("is-busy");
+    elements.panelScreenshotButton.title =
+      "Download complete analysis panel screenshot";
     updateScreenshotAvailability();
   }
 }
@@ -1971,6 +2499,10 @@ elements.fileInput.addEventListener("change", () => {
 
 elements.emptyFileButton.addEventListener("click", () => elements.fileInput.click());
 elements.screenshotButton.addEventListener("click", downloadSquareScreenshot);
+elements.panelScreenshotButton.addEventListener(
+  "click",
+  downloadCompletePanelScreenshot,
+);
 elements.startExperiment.addEventListener(
   "click",
   startExperimentFromSelectedFrame,

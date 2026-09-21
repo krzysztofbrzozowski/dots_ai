@@ -445,6 +445,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert "Decision timeline" in page.text
     assert 'id="diagnostics-output"' in page.text
     assert 'id="screenshot-button"' in page.text
+    assert 'id="panel-screenshot-button"' in page.text
     assert 'data-overlay="head-value"' in page.text
     assert 'data-overlay="head-policy"' in page.text
     assert "Prior P" in page.text
@@ -467,6 +468,8 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert "renderMoveComparison" in script.text
     assert "logDiagnostic" in script.text
     assert "downloadSquareScreenshot" in script.text
+    assert "downloadCompletePanelScreenshot" in script.text
+    assert "TOP_MOVE_ROW_COUNT = 6" in script.text
     assert "startExperimentFromSelectedFrame" in script.text
     assert "runExperimentCommand" in script.text
     assert "pollExperiment" in script.text
@@ -475,6 +478,7 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
     assert "renderSquareCanvas" in renderer.text
+    assert "renderCanvas(width, height" in renderer.text
     assert 'this.overlay !== "none"' in renderer.text
     assert renderer.headers["cache-control"] == "no-store"
     assert health.json() == {"status": "ready"}
