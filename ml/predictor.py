@@ -163,15 +163,8 @@ def predict_game_state(model, state):
     return _value_result(model, _predict_outputs(model, state))
 
 
-def predict_policy(model, state):
-    """Return a legal-move probability map for the current position.
-
-    The network produces one raw logit per board cell. Illegal cells are
-    excluded before a numerically stable softmax, so the returned legal
-    probabilities sum to one and every illegal cell is exactly zero.
-    """
-    # Get the policy head predictions
-    predictions = _predict_outputs(model, state)
+def _policy_result(model, predictions, state):
+    """Convert one named policy output into a legal probability map."""
     # returns
     # predictions['policy'] -> array[[2.8634408, 0.24973416, -1.2134645, -0.7428496, ...]]
     # ...
@@ -223,6 +216,25 @@ def predict_policy(model, state):
         "policy": policy_map.tolist(),
         "top_moves": top_moves,
         "source": "model",
+    }
+
+
+def predict_policy(model, state):
+    """Return a legal-move probability map for the current position.
+
+    The network produces one raw logit per board cell. Illegal cells are
+    excluded before a numerically stable softmax, so the returned legal
+    probabilities sum to one and every illegal cell is exactly zero.
+    """
+    return _policy_result(model, _predict_outputs(model, state), state)
+
+
+def predict_policy_value(model, state):
+    """Evaluate both network heads with one model inference."""
+    predictions = _predict_outputs(model, state)
+    return {
+        **_policy_result(model, predictions, state),
+        **_value_result(model, predictions),
     }
 
 
@@ -323,6 +335,16 @@ class DualHeadPredictor:
         """Predict policy from an already constructed game state."""
         with self._prediction_lock:
             prediction = predict_policy(self._load_model(), state)
+        return {
+            **prediction,
+            "player": int(state.next_to_move),
+            "model": self.model_name,
+        }
+
+    def predict_state_policy_value(self, state):
+        """Predict policy and value together for sequential neural MCTS."""
+        with self._prediction_lock:
+            prediction = predict_policy_value(self._load_model(), state)
         return {
             **prediction,
             "player": int(state.next_to_move),

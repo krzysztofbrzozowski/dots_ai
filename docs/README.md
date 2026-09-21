@@ -2,6 +2,8 @@
 
 - [Monte Carlo Tree Search](README_MCTS.md) — selection, expansion, random
   rollouts, backpropagation, UCT, and process-based parallelism.
+- [Sequential neural MCTS](README_NEURAL_MCTS.md) — policy priors, PUCT,
+  value-head leaf evaluation, and the isolated ML entry point.
 - [Game engine](README_GAME.md) — board state, legal moves, captures,
   connectivity, scoring, and rendering.
 - [Shared MCTS workspace](README_GUI.md) — one frontend for live self-play and
