@@ -15,14 +15,14 @@ from ml.predictor import MODEL_PATH, DualHeadPredictor
 from training import SelfPlayTrajectory
 
 
-ROWS = 25
-COLS = 25
+ROWS = 30
+COLS = 30
 DEFAULT_SIMULATIONS = 128
 DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8002
-SIMULATION_SECONDS = 20
-C_PUCT = 1.5
+SIMULATION_SECONDS = 30
+C_PUCT = 0.8
 TRAINING_DATA_DIRECTORY = (
     Path(__file__).resolve().parent / "training_data" / "neural_mcts"
 )
