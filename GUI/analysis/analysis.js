@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260921-panel-export";
+} from "/shared/board_renderer.js?v=20260922-enclosure-edges";
 
 
 const elements = {

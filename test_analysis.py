@@ -477,6 +477,8 @@ def test_analysis_server_serves_the_gui_and_shared_renderer():
     assert "replayFrames" in script.text
     assert renderer.status_code == 200
     assert "DotsBoardRenderer" in renderer.text
+    assert "deriveEnclosureEdges" in renderer.text
+    assert "drawEnclosures" in renderer.text
     assert "renderSquareCanvas" in renderer.text
     assert "renderCanvas(width, height" in renderer.text
     assert 'this.overlay !== "none"' in renderer.text

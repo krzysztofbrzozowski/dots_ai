@@ -3,6 +3,175 @@
 export const PLAYER_1 = 1;
 export const PLAYER_2 = -1;
 
+const ORTHOGONAL_NEIGHBORS = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+];
+const FORWARD_NEIGHBORS_8 = [
+  [0, 1],
+  [1, -1],
+  [1, 0],
+  [1, 1],
+];
+
+
+function coordinateKey(row, col) {
+  return `${row}:${col}`;
+}
+
+
+function enclosureComponent(territory, startRow, startCol, owner, visited) {
+  const rows = territory.length;
+  const cols = territory[0]?.length || 0;
+  const stack = [[startRow, startCol]];
+  const component = [];
+  visited[startRow][startCol] = true;
+
+  while (stack.length) {
+    const [row, col] = stack.pop();
+    component.push([row, col]);
+
+    for (const [deltaRow, deltaCol] of ORTHOGONAL_NEIGHBORS) {
+      const nextRow = row + deltaRow;
+      const nextCol = col + deltaCol;
+      if (
+        nextRow < 0 ||
+        nextRow >= rows ||
+        nextCol < 0 ||
+        nextCol >= cols ||
+        visited[nextRow][nextCol] ||
+        territory[nextRow][nextCol] !== owner
+      ) {
+        continue;
+      }
+      visited[nextRow][nextCol] = true;
+      stack.push([nextRow, nextCol]);
+    }
+  }
+
+  return component;
+}
+
+
+function componentBoundaryDots(board, component, owner) {
+  const rows = board.length;
+  const cols = board[0]?.length || 0;
+  const candidates = new Map();
+
+  // Orthogonal contact identifies the tight wall used by the four-directional
+  // territory flood fill. Diagonal-only dots are deliberately omitted: they
+  // are usually branches or redundant outer corners rather than part of the
+  // smallest visible enclosure.
+  for (const [row, col] of component) {
+    for (const [deltaRow, deltaCol] of ORTHOGONAL_NEIGHBORS) {
+      const boundaryRow = row + deltaRow;
+      const boundaryCol = col + deltaCol;
+      if (
+        boundaryRow < 0 ||
+        boundaryRow >= rows ||
+        boundaryCol < 0 ||
+        boundaryCol >= cols ||
+        board[boundaryRow][boundaryCol] !== owner
+      ) {
+        continue;
+      }
+      candidates.set(
+        coordinateKey(boundaryRow, boundaryCol),
+        [boundaryRow, boundaryCol],
+      );
+    }
+  }
+
+  return candidates;
+}
+
+
+function closedBoundaryEdges(candidates, owner) {
+  if (candidates.size < 3) return [];
+
+  const adjacency = new Map(
+    [...candidates.keys()].map((key) => [key, new Set()]),
+  );
+  for (const [key, [row, col]] of candidates) {
+    for (const [deltaRow, deltaCol] of FORWARD_NEIGHBORS_8) {
+      const neighborKey = coordinateKey(row + deltaRow, col + deltaCol);
+      if (!candidates.has(neighborKey)) continue;
+      adjacency.get(key).add(neighborKey);
+      adjacency.get(neighborKey).add(key);
+    }
+  }
+
+  // Keep the graph's 2-core. Removing degree-zero/one dots strips unrelated
+  // branches while preserving every closed chain around the territory.
+  const active = new Set(candidates.keys());
+  const queue = [...active].filter((key) => adjacency.get(key).size < 2);
+  for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+    const key = queue[queueIndex];
+    if (!active.delete(key)) continue;
+    for (const neighborKey of adjacency.get(key)) {
+      if (!active.has(neighborKey)) continue;
+      adjacency.get(neighborKey).delete(key);
+      if (adjacency.get(neighborKey).size < 2) queue.push(neighborKey);
+    }
+  }
+  if (active.size < 3) return [];
+
+  const edges = [];
+  for (const key of active) {
+    for (const neighborKey of adjacency.get(key)) {
+      if (!active.has(neighborKey) || key >= neighborKey) continue;
+      edges.push({
+        owner,
+        from: candidates.get(key),
+        to: candidates.get(neighborKey),
+      });
+    }
+  }
+  return edges;
+}
+
+
+export function deriveEnclosureEdges(board, territory) {
+  const rows = territory?.length || 0;
+  const cols = territory?.[0]?.length || 0;
+  if (!rows || !cols || board?.length !== rows) return [];
+
+  const edges = new Map();
+  for (const owner of [PLAYER_1, PLAYER_2]) {
+    const visited = Array.from(
+      { length: rows },
+      () => Array(cols).fill(false),
+    );
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        if (visited[row][col] || territory[row][col] !== owner) continue;
+        const component = enclosureComponent(
+          territory,
+          row,
+          col,
+          owner,
+          visited,
+        );
+        const candidates = componentBoundaryDots(board, component, owner);
+        for (const edge of closedBoundaryEdges(candidates, owner)) {
+          const fromKey = coordinateKey(...edge.from);
+          const toKey = coordinateKey(...edge.to);
+          const endpoints = fromKey < toKey
+            ? `${fromKey}|${toKey}`
+            : `${toKey}|${fromKey}`;
+          const edgeKey = `${owner}:${endpoints}`;
+          edges.set(edgeKey, edge);
+        }
+      }
+    }
+  }
+
+  return [...edges.values()];
+}
+
 
 function cssColor(variableName) {
   return getComputedStyle(document.documentElement)
@@ -46,6 +215,7 @@ export class DotsBoardRenderer {
     this.overlay = "value";
     this.headPolicy = null;
     this.selectedCell = null;
+    this.enclosureEdges = [];
     this.layout = null;
 
     this.handleCanvasClick = this.handleCanvasClick.bind(this);
@@ -59,6 +229,9 @@ export class DotsBoardRenderer {
   setFrame(frame) {
     if (this.frame !== frame) this.headPolicy = null;
     this.frame = frame;
+    this.enclosureEdges = frame
+      ? deriveEnclosureEdges(frame.board, frame.territory)
+      : [];
     this.canvas.classList.toggle("is-interactive", Boolean(frame));
     this.resizeAndDraw();
   }
@@ -207,6 +380,7 @@ export class DotsBoardRenderer {
     // The lattice and placed dots form the base position. The "None" mode
     // deliberately stops here, leaving all search-specific marks hidden.
     this.drawGrid();
+    this.drawEnclosures();
     this.drawDots();
 
     if (showAnalysisOverlay) {
@@ -415,6 +589,46 @@ export class DotsBoardRenderer {
     for (let row = 0; row < rows; row += 1) {
       this.context.fillText(String(row), originX - 26, originY + row * step);
     }
+  }
+
+  drawEnclosures() {
+    if (!this.enclosureEdges.length) return;
+
+    const { step, originX, originY } = this.layout;
+    this.context.save();
+    this.context.lineCap = "round";
+    this.context.lineJoin = "round";
+    this.context.lineWidth = Math.max(2, Math.min(5, step * 0.13));
+    this.context.globalAlpha = 0.78;
+
+    for (const owner of [PLAYER_1, PLAYER_2]) {
+      const playerEdges = this.enclosureEdges.filter(
+        (edge) => edge.owner === owner,
+      );
+      if (!playerEdges.length) continue;
+
+      const color = cssColor(
+        owner === PLAYER_1 ? "--player-one" : "--player-two",
+      );
+      this.context.strokeStyle = color;
+      this.context.shadowColor = color;
+      this.context.shadowBlur = Math.max(2, Math.min(7, step * 0.15));
+      this.context.beginPath();
+      for (const edge of playerEdges) {
+        const [fromRow, fromCol] = edge.from;
+        const [toRow, toCol] = edge.to;
+        this.context.moveTo(
+          originX + fromCol * step,
+          originY + fromRow * step,
+        );
+        this.context.lineTo(
+          originX + toCol * step,
+          originY + toRow * step,
+        );
+      }
+      this.context.stroke();
+    }
+    this.context.restore();
   }
 
   drawDots() {
