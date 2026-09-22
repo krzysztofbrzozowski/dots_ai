@@ -402,9 +402,16 @@ export class DotsBoardRenderer {
 
         const x = originX + col * step;
         const y = originY + row * step;
+        const isPlayerOne = owner === PLAYER_1;
         this.context.fillStyle = cssColor(
-          owner === PLAYER_1 ? "--territory-player-one" : "--territory-player-two",
+          isPlayerOne ? "--territory-player-one" : "--territory-player-two",
         );
+        this.context.strokeStyle = cssColor(
+          isPlayerOne
+            ? "--territory-player-one-outline"
+            : "--territory-player-two-outline",
+        );
+        this.context.lineWidth = 1;
         this.context.beginPath();
         this.context.roundRect(
           x - territorySize / 2,
@@ -414,6 +421,7 @@ export class DotsBoardRenderer {
           Math.max(3, step * 0.12),
         );
         this.context.fill();
+        this.context.stroke();
       }
     }
   }
@@ -598,8 +606,8 @@ export class DotsBoardRenderer {
     this.context.save();
     this.context.lineCap = "round";
     this.context.lineJoin = "round";
-    this.context.lineWidth = Math.max(2, Math.min(5, step * 0.13));
-    this.context.globalAlpha = 0.78;
+    const lineWidth = Math.max(2, Math.min(5, step * 0.13));
+    this.context.globalAlpha = 0.9;
 
     for (const owner of [PLAYER_1, PLAYER_2]) {
       const playerEdges = this.enclosureEdges.filter(
@@ -607,25 +615,36 @@ export class DotsBoardRenderer {
       );
       if (!playerEdges.length) continue;
 
-      const color = cssColor(
+      const lineColor = cssColor(
         owner === PLAYER_1 ? "--player-one" : "--player-two",
       );
-      this.context.strokeStyle = color;
-      this.context.shadowColor = color;
-      this.context.shadowBlur = Math.max(2, Math.min(7, step * 0.15));
-      this.context.beginPath();
-      for (const edge of playerEdges) {
-        const [fromRow, fromCol] = edge.from;
-        const [toRow, toCol] = edge.to;
-        this.context.moveTo(
-          originX + fromCol * step,
-          originY + fromRow * step,
-        );
-        this.context.lineTo(
-          originX + toCol * step,
-          originY + toRow * step,
-        );
-      }
+      const outlineColor = cssColor(
+        owner === PLAYER_1 ? "--player-one-outline" : "--player-two-outline",
+      );
+      const drawEdgePath = () => {
+        this.context.beginPath();
+        for (const edge of playerEdges) {
+          const [fromRow, fromCol] = edge.from;
+          const [toRow, toCol] = edge.to;
+          this.context.moveTo(
+            originX + fromCol * step,
+            originY + fromRow * step,
+          );
+          this.context.lineTo(
+            originX + toCol * step,
+            originY + toRow * step,
+          );
+        }
+      };
+
+      this.context.strokeStyle = outlineColor;
+      this.context.lineWidth = lineWidth + 2;
+      drawEdgePath();
+      this.context.stroke();
+
+      this.context.strokeStyle = lineColor;
+      this.context.lineWidth = lineWidth;
+      drawEdgePath();
       this.context.stroke();
     }
     this.context.restore();
@@ -649,24 +668,18 @@ export class DotsBoardRenderer {
         const dotColor = cssColor(
           player === PLAYER_1 ? "--player-one" : "--player-two",
         );
-        const highlight = cssColor(
-          player === PLAYER_1 ? "--player-one-highlight" : "--player-two-highlight",
-        ) || dotColor;
-        const dotGradient = this.context.createRadialGradient(
-          x - dotRadius * 0.35, y - dotRadius * 0.4, 0,
-          x, y, dotRadius,
+        const outlineColor = cssColor(
+          player === PLAYER_1 ? "--player-one-outline" : "--player-two-outline",
         );
-        dotGradient.addColorStop(0, highlight);
-        dotGradient.addColorStop(1, dotColor);
-        this.context.fillStyle = dotGradient;
-        this.context.shadowColor = dotColor;
-        this.context.shadowBlur = 8;
+        this.context.fillStyle = dotColor;
+        this.context.shadowColor = "rgba(0, 0, 0, 0.16)";
+        this.context.shadowBlur = 3;
         this.context.beginPath();
         this.context.arc(x, y, dotRadius, 0, Math.PI * 2);
         this.context.fill();
         this.context.shadowBlur = 0;
-        this.context.strokeStyle = cssColor("--board-surface");
-        this.context.lineWidth = 2;
+        this.context.strokeStyle = outlineColor;
+        this.context.lineWidth = Math.max(1.5, step * 0.04);
         this.context.stroke();
         this.context.restore();
       }

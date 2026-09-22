@@ -4,7 +4,7 @@ import {
   DotsBoardRenderer,
   PLAYER_1,
   PLAYER_2,
-} from "/shared/board_renderer.js?v=20260922-enclosure-edges";
+} from "/shared/board_renderer.js?v=20260922-monochrome";
 
 
 const elements = {
@@ -614,7 +614,7 @@ function drawTopMovesTable(context, x, y, width, colors) {
   rows.forEach((row, rowIndex) => {
     const rowY = y + headerHeight + columnsHeight + rowIndex * rowHeight;
     if (row.classList.contains("is-selected")) {
-      context.fillStyle = "rgba(243, 217, 160, 0.055)";
+      context.fillStyle = "rgba(0, 0, 0, 0.035)";
       context.fillRect(x + 1, rowY, width - 2, rowHeight);
     }
     context.fillStyle = colors.border;
@@ -726,6 +726,10 @@ async function renderCompletePanelCanvas() {
     accent: exportColor("--accent"),
     playerOne: exportColor("--player-one"),
     playerTwo: exportColor("--player-two"),
+    playerOneInk: exportColor("--player-one-ink"),
+    playerTwoInk: exportColor("--player-two-ink"),
+    playerOneOutline: exportColor("--player-one-outline"),
+    playerTwoOutline: exportColor("--player-two-outline"),
     selected: exportColor("--selected-action"),
     unvisited: exportColor("--unvisited-action"),
   };
@@ -763,8 +767,8 @@ async function renderCompletePanelCanvas() {
     const buttonWidth = overlayWidths[index];
     if (button.classList.contains("is-active")) {
       drawRoundedBox(context, overlayCursor, 26, buttonWidth, 30, {
-        fill: "rgba(121, 220, 232, 0.075)",
-        stroke: "rgba(121, 220, 232, 0.26)",
+        fill: "rgba(0, 0, 0, 0.055)",
+        stroke: "rgba(0, 0, 0, 0.24)",
         radius: 5,
       });
     }
@@ -785,24 +789,28 @@ async function renderCompletePanelCanvas() {
   });
 
   const playerText = elements.playerPill.textContent;
-  const playerColor = elements.playerPill.classList.contains("player-one")
-    ? colors.playerOne
-    : colors.playerTwo;
+  const isPlayerOne = elements.playerPill.classList.contains("player-one");
+  const playerColor = isPlayerOne ? colors.playerOne : colors.playerTwo;
+  const playerInk = isPlayerOne ? colors.playerOneInk : colors.playerTwoInk;
+  const playerOutline = isPlayerOne
+    ? colors.playerOneOutline
+    : colors.playerTwoOutline;
   const playerWidth = 116;
   const playerX = overlayX - playerWidth - 12;
   drawRoundedBox(context, playerX, 26, playerWidth, 30, {
-    fill: elements.playerPill.classList.contains("player-one")
-      ? "rgba(236, 139, 184, 0.14)"
-      : "rgba(121, 220, 232, 0.13)",
-    stroke: playerColor,
+    fill: isPlayerOne ? "rgba(0, 0, 0, 0.065)" : colors.surface,
+    stroke: colors.borderStrong,
     radius: 6,
   });
   context.fillStyle = playerColor;
   context.beginPath();
   context.arc(playerX + 12, 41, 3, 0, Math.PI * 2);
   context.fill();
+  context.strokeStyle = playerOutline;
+  context.lineWidth = 1;
+  context.stroke();
   drawCanvasText(context, playerText, playerX + 21, 45, {
-    color: playerColor,
+    color: playerInk,
     font: "10px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
     maximumWidth: playerWidth - 27,
   });
@@ -838,18 +846,21 @@ async function renderCompletePanelCanvas() {
 
   const legendY = boardY + PANEL_EXPORT_BOARD_HEIGHT + 22;
   const legendItems = [
-    ["Player 1", colors.playerOne, "dot"],
-    ["Player 2", colors.playerTwo, "dot"],
-    ["Selected action", colors.selected, "ring"],
-    ["Unvisited legal action", colors.unvisited, "ring"],
+    ["Player 1", colors.playerOne, "dot", colors.playerOneOutline],
+    ["Player 2", colors.playerTwo, "dot", colors.playerTwoOutline],
+    ["Selected action", colors.selected, "ring", colors.selected],
+    ["Unvisited legal action", colors.unvisited, "ring", colors.unvisited],
   ];
   let legendX = padding;
-  for (const [label, color, type] of legendItems) {
+  for (const [label, color, type, outline] of legendItems) {
     context.beginPath();
     context.arc(legendX + 4, legendY - 3, type === "dot" ? 3.5 : 4.5, 0, Math.PI * 2);
     if (type === "dot") {
       context.fillStyle = color;
       context.fill();
+      context.strokeStyle = outline;
+      context.lineWidth = 1;
+      context.stroke();
     } else {
       context.strokeStyle = color;
       context.lineWidth = 1.2;

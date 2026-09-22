@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" fill="none">
 <defs>
-  <linearGradient id="signal"><stop stop-color="#ec8bb8"/><stop offset=".5" stop-color="#a295d4"/><stop offset="1" stop-color="#79dce8"/></linearGradient>
-  <linearGradient id="node"><stop stop-color="#79dce8"/><stop offset=".45" stop-color="#b6a5dc"/><stop offset=".7" stop-color="#ec8bb8"/><stop offset="1" stop-color="#ffc5df"/></linearGradient>
+  <linearGradient id="signal"><stop stop-color="#1d1d1f"/><stop offset=".5" stop-color="#86868b"/><stop offset="1" stop-color="#d2d2d7"/></linearGradient>
+  <linearGradient id="node"><stop stop-color="#1d1d1f"/><stop offset=".45" stop-color="#6e6e73"/><stop offset=".7" stop-color="#a1a1a6"/><stop offset="1" stop-color="#d2d2d7"/></linearGradient>
   <radialGradient id="fade"><stop stop-color="white" stop-opacity="0"/><stop offset=".48" stop-color="white" stop-opacity=".05"/><stop offset=".8" stop-color="white" stop-opacity=".7"/><stop offset="1" stop-color="white"/></radialGradient>
   <mask id="edges"><rect width="1000" height="560" fill="url(#fade)"/></mask>
 </defs>
@@ -75,25 +75,25 @@
 <path d="M765 490L918 240" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
 <path d="M765 490L918 320" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
 <path d="M765 490L918 400" stroke="url(#signal)" stroke-width=".7" opacity=".28"/>
-<path d="M82 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<path d="M82 0V560" stroke="#8e8e93" stroke-dasharray="4 9" opacity=".13"/>
 <circle cx="82" cy="120" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="120" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="82" cy="190" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="190" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="82" cy="260" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="260" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="82" cy="330" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="330" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="82" cy="400" r="14" fill="url(#node)" opacity=".08"/><circle cx="82" cy="400" r="7" fill="url(#node)" opacity=".78"/>
-<path d="M235 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<path d="M235 0V560" stroke="#8e8e93" stroke-dasharray="4 9" opacity=".13"/>
 <circle cx="235" cy="70" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="70" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="235" cy="170" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="170" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="235" cy="270" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="270" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="235" cy="370" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="370" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="235" cy="470" r="14" fill="url(#node)" opacity=".08"/><circle cx="235" cy="470" r="7" fill="url(#node)" opacity=".78"/>
-<path d="M765 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<path d="M765 0V560" stroke="#8e8e93" stroke-dasharray="4 9" opacity=".13"/>
 <circle cx="765" cy="90" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="90" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="765" cy="190" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="190" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="765" cy="290" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="290" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="765" cy="390" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="390" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="765" cy="490" r="14" fill="url(#node)" opacity=".08"/><circle cx="765" cy="490" r="7" fill="url(#node)" opacity=".78"/>
-<path d="M918 0V560" stroke="#b796c4" stroke-dasharray="4 9" opacity=".13"/>
+<path d="M918 0V560" stroke="#8e8e93" stroke-dasharray="4 9" opacity=".13"/>
 <circle cx="918" cy="160" r="14" fill="url(#node)" opacity=".08"/><circle cx="918" cy="160" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="918" cy="240" r="14" fill="url(#node)" opacity=".08"/><circle cx="918" cy="240" r="7" fill="url(#node)" opacity=".78"/>
 <circle cx="918" cy="320" r="14" fill="url(#node)" opacity=".08"/><circle cx="918" cy="320" r="7" fill="url(#node)" opacity=".78"/>
