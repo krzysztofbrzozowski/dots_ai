@@ -22,7 +22,7 @@ DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8002
 SIMULATION_SECONDS = 30
-C_PUCT = 0.8
+C_PUCT = 1.5
 TRAINING_DATA_DIRECTORY = (
     Path(__file__).resolve().parent / "training_data" / "neural_mcts"
 )
@@ -46,6 +46,7 @@ def run_neural_mcts_game(
     if simulation_seconds is not None and simulation_seconds <= 0:
         raise ValueError("simulation_seconds must be positive or None")
 
+    # Trajectory -> npz recorder object
     trajectory = (
         SelfPlayTrajectory(
             simulation_seconds=simulation_seconds,
@@ -61,14 +62,18 @@ def run_neural_mcts_game(
         moving_player = board_state.next_to_move
         root = NeuralMCTSNode(state=board_state)
         search = NeuralMonteCarloTreeSearch(
-            root,
+            node=root,
+            # evaluator -> returns prediction of policy and value
             evaluator=evaluator,
             c_puct=c_puct,
         )
+        # best_action -> MAIN RUNNER
+        # Run simulation NUMBER based
         if simulation_seconds is None:
             best_node = search.best_action(
                 simulations_number=simulations_number,
             )
+        # Run simulation TIME based
         else:
             best_node = search.best_action(
                 total_simulation_seconds=simulation_seconds,
@@ -121,6 +126,7 @@ def run_neural_mcts_game(
 
 def main():
     board_state = DotsGame(ROWS, COLS)
+    # Get the model
     predictor = DualHeadPredictor(MODEL_PATH)
     initialize_live_game(
         board_state,
@@ -142,6 +148,7 @@ def main():
             level="success",
             source="MODEL",
         )
+        # Main game loop
         run_neural_mcts_game(
             board_state,
             evaluator=predictor.predict_state_policy_value,

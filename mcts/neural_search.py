@@ -92,6 +92,8 @@ class NeuralMCTSNode:
         self._expanded = True
 
     def best_child(self, c_puct):
+        #  Test only
+        # return max(self.children, key=lambda child: child.prior)
         """Choose the child with the largest PUCT score."""
         if not self.children:
             raise RuntimeError("cannot select a child before expanding the node")
@@ -103,6 +105,9 @@ class NeuralMCTSNode:
                 c_puct * child.prior * parent_scale / (1 + child.n)
             )
             return mean_value + exploration
+            # Test only -> return mean_value
+            # return mean_value
+
 
         return max(self.children, key=puct_score)
 
@@ -170,19 +175,41 @@ class NeuralMonteCarloTreeSearch:
         if not self.root.children:
             raise RuntimeError("neural MCTS did not expand the root")
 
-        # Visit count is the robust policy-improvement target used by neural MCTS.
-        # Prior probability only resolves the one-simulation all-zero tie.
-        return max(self.root.children, key=lambda child: (child.n, child.prior))
+        # Select the most visited root child.
+        # If multiple children have the same visit count,
+        # select the one with the highest policy prior.
+        return max(
+            self.root.children,
+            key=lambda child: (child.n, child.prior),
+        )
 
     def _run_simulation(self):
-        node = self.root
-        while node.is_expanded and node.children:
-            node = node.best_child(self.c_puct)
+        # current_node = current game state <- NeuralMCTSNode(state=board_state)
+        current_node = self.root
+        # 1st simulation:
+        #   ROOT IS NOT EXPANDED (is_expanded == False)
+        #   -> skip selection loop
+        #   -> evaluate root
+        #   -> create all children
+        #   -> set root is_expanded = True
+        #
+        # 2nd simulation:
+        #   ROOT IS EXPANDED and has children
+        #   -> select best child
+        #   -> child is not expanded, so stop selection loop
+        #   -> evaluate and expand child
+        #
+        # Next simulations:
+        #   -> go through expanded nodes
+        #   -> stop at the first unexpanded node
+        #   -> evaluate and expand it
+        while current_node.is_expanded and current_node.children:
+            current_node = current_node.best_child(self.c_puct)
 
-        if node.is_terminal_node():
-            value = float(node.state.game_result * node.state.next_to_move)
+        if current_node.is_terminal_node():
+            value = float(current_node.state.game_result * current_node.state.next_to_move)
         else:
-            prediction = self.evaluator(node.state)
+            prediction = self.evaluator(current_node.state)
             try:
                 policy = prediction["policy"]
                 value = float(prediction["value"])
@@ -192,6 +219,13 @@ class NeuralMonteCarloTreeSearch:
                 ) from error
             if not math.isfinite(value) or not -1.0 <= value <= 1.0:
                 raise ValueError("evaluator value must be finite and within [-1, 1]")
-            node.expand(policy)
-
-        node.backpropagate(value)
+            current_node.expand(policy)
+        # TODO: Consider backpropagating and storing separate loss/draw/win values
+        # instead of reducing them immediately to the scalar `win - loss`.
+        # Different outcome distributions can produce the same scalar value:
+        #   A = [loss=0.35, draw=0.00, win=0.65] -> value=0.30
+        #   B = [loss=0.05, draw=0.60, win=0.35] -> value=0.30
+        # The current representation treats A and B as identical, losing information
+        # about draw probability and outcome risk. PUCT could still derive its scalar
+        # Q as `win - loss`, while the node preserves the full distribution.
+        current_node.backpropagate(value)
