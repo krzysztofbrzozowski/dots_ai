@@ -144,7 +144,7 @@ def _value_result(model, predictions):
         _named_model_output(model, predictions, "value")
     )[0]
 
-    # Training labels are 0=loss, 1=draw, and 2=win for the player to move.
+    # Training value targets are 0=loss, 1=draw, and 2=win for the player to move.
     if probabilities.shape != (3,) or not np.all(np.isfinite(probabilities)):
         raise ValueError("Model must return three finite loss/draw/win probabilities")
 

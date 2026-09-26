@@ -125,7 +125,10 @@ class CollectionTests(unittest.TestCase):
             self.assertEqual(session["games_added"], 8)
             self.assertEqual(report["games"], 8)
             self.assertEqual(report["starting_players"], {-1: 4, 1: 4})
-            self.assertEqual(sum(report["labels_loss_draw_win"]), report["positions"])
+            self.assertEqual(
+                sum(report["value_targets_loss_draw_win"]),
+                report["positions"],
+            )
             self.assertEqual(report["replay_validation"], "passed")
             self.assertFalse(report["augmentation"])
             self.assertGreater(report["rollouts"], 0)

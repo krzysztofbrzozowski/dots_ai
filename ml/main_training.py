@@ -26,13 +26,13 @@ MODEL_PATH = (
     PROJECT_ROOT
     / "ml"
     / "models"
-    / "30x30_090507_new_data_dual_head_v1.keras"
+    / "30x30_090507_new_data_dual_head_v1_test.keras"
 )
 HISTORY_PATH = (
     PROJECT_ROOT
     / "docs"
     / "imgs"
-    / "training_history_30x30_090507_new_data_dual_head_v1.png"
+    / "training_history_30x30_090507_new_data_dual_head_v1_test.png"
 )
 
 BOARD_SHAPE = (30, 30)
@@ -41,13 +41,19 @@ TEST_FRACTION = 0.05
 DATA_SEED = 42
 BATCH_SIZE = 2048
 EPOCHS = 7
-FILE_WORKERS = 13
+FILE_WORKERS = 10
 
 # The machine has 48 GB of unified memory. About 30 GiB of training tensors,
 # together with the model, TensorFlow, and macOS allocations, should place the
 # observed total near 42-45 GB without changing the optimizer batch size.
 SHUFFLE_BUFFER_MEMORY_GIB = 32
 BYTES_PER_POSITION = (
+    # 30 x 30 x 5 x 4BYTES(float32) -> 
+    #    my_dots,
+    #    opponent_dots,
+    #    my_territory,
+    #    opponent_territory,
+    #    game["legal_masks"],
     BOARD_SHAPE[0] * BOARD_SHAPE[1] * 5 * 4
     + 2 * 4
     + BOARD_SHAPE[0] * BOARD_SHAPE[1] * 4
@@ -61,7 +67,7 @@ SHUFFLE_BUFFER_SIZE = int(
 
 def create_datasets():
     """Split by complete games and create bounded-memory input pipelines."""
-
+    # Shuffle and split the data paths -> training, validataion and test ones
     training_paths, validation_paths, test_paths = split_game_paths(
         DATA_DIRECTORY,
         validation_fraction=VALIDATION_FRACTION,
@@ -80,6 +86,16 @@ def create_datasets():
         f"(~{SHUFFLE_BUFFER_MEMORY_GIB} GiB tensor payload)"
     )
 
+    # Calculate amount of training positions/sets stored in all *.npz files
+    # Done parallel using FILE_WORKERS to know how long the batch will be processed during training (used later in streaming_dual_head_npz_dataset)
+    # e.g. calcuation will look like this
+    #   training_position_count -> 1 000 000
+    #   BATCH_SIZE              -> 2048
+    #   batch count             -> ceil(1 000 000 / 2048) = 489
+    #
+    #   during training     -> 123/489 batches
+    #                       -> time needed for one epoch can be calculateds
+    #                       -> (in streaming_dual_head_npz_dataset) 12/5613 ━━━━━━━━━━━━━━━━━━━━ 2:19:58 1s/step - ...
     print("Counting positions for exact epoch progress...")
     training_position_count = count_game_positions(
         training_paths,

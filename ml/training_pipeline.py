@@ -13,7 +13,7 @@ from ml.data_loader import load_dual_head_game_samples
 
 def batched_array_dataset(
     samples,
-    labels,
+    targets,
     batch_size,
     *,
     sample_weights=None,
@@ -28,16 +28,16 @@ def batched_array_dataset(
     supported for multi-output targets and per-output sample weights.
     """
     sample_arrays = tf.nest.flatten(samples)
-    label_arrays = tf.nest.flatten(labels)
+    target_arrays = tf.nest.flatten(targets)
     weight_arrays = (
         [] if sample_weights is None else tf.nest.flatten(sample_weights)
     )
     if not sample_arrays:
         raise ValueError("samples cannot be empty")
-    if not label_arrays:
-        raise ValueError("labels cannot be empty")
+    if not target_arrays:
+        raise ValueError("targets cannot be empty")
     number_of_samples = len(sample_arrays[0])
-    all_arrays = (*sample_arrays, *label_arrays, *weight_arrays)
+    all_arrays = (*sample_arrays, *target_arrays, *weight_arrays)
     if any(len(array) != number_of_samples for array in all_arrays):
         raise ValueError(
             "all inputs, targets, and weights must contain the same number of items"
@@ -49,7 +49,7 @@ def batched_array_dataset(
     ):
         raise ValueError("batch_size must be a positive integer")
     if number_of_samples == 0:
-        raise ValueError("samples and labels cannot be empty")
+        raise ValueError("samples and targets cannot be empty")
 
     random_generator = np.random.default_rng(seed)
 
@@ -64,7 +64,7 @@ def batched_array_dataset(
                 batch_indices = indices[start:start + batch_size]
                 batch = (
                     select(samples, batch_indices),
-                    select(labels, batch_indices),
+                    select(targets, batch_indices),
                 )
                 if sample_weights is not None:
                     batch = (*batch, select(sample_weights, batch_indices))
@@ -75,7 +75,7 @@ def batched_array_dataset(
                 batch_indices = slice(start, stop)
                 batch = (
                     select(samples, batch_indices),
-                    select(labels, batch_indices),
+                    select(targets, batch_indices),
                 )
                 if sample_weights is not None:
                     batch = (*batch, select(sample_weights, batch_indices))
@@ -89,7 +89,7 @@ def batched_array_dataset(
 
     output_signature = (
         tf.nest.map_structure(tensor_spec, samples),
-        tf.nest.map_structure(tensor_spec, labels),
+        tf.nest.map_structure(tensor_spec, targets),
     )
     if sample_weights is not None:
         output_signature = (
@@ -188,14 +188,61 @@ def streaming_dual_head_npz_dataset(
     action_count = rows * columns
     generation = itertools.count()
 
+    # Training shuffle buffer: 1,588,963 positions (~32 GiB tensor payload)
+    # Counting positions for exact epoch progress...
+    # Position split: 11,494,130 training, 639,641 validation, 642,538 test
+
+    # Get the game samples one by one
+    # -> We got 10 file workers runing in parallel
+    # -> 20 are queued
+    # next(game_blocks_generator) -> returns one game npz and pushing it to RAM memory
     def game_blocks():
+        # Get all the training paths - 0.05 validation and 0.05 test ones
+        # 30x30 -> 81 457 (*.npz files)
         ordered_paths = list(paths)
         if shuffle:
             generation_index = next(generation)
             effective_seed = None if seed is None else seed + generation_index
             np.random.default_rng(effective_seed).shuffle(ordered_paths)
+        # Yield the game samples when the function is called
+        # -> Get the game paths as 300 * below structure in one yield
+        # (
+        #     n -> positions amount (liczba pozycji)
+        #     (board_samples, score_features),
+        #           -> board_samples.shape  = (n, 30, 30, 5)
+        #                   my_dots,
+        #                   opponent_dots,
+        #                   my_territory,
+        #                   opponent_territory,
+        #                   game["legal_masks"],
+        #           -> score_features.shape = (n, 2)
+        #                   my_scores
+        #                   opponent_scores
+        #     {
+        #         "policy": policy_targets,
+        #            -> policy_targets.shape == (n, 900)
+        #               -> this is exactly one move created during round
+        #               -> policy_targets[20].sum() == 1.0 or policy_targets[21].sum() == 1.0
+        #               ->  
+        #                   board_samples[20]  -> board state before the enclosing dot is placed
+        #                   policy_targets[20] -> 1 at the position where the enclosing dot will be placed
+        #                   board_samples[21]  -> board state containing that dot and the resulting capture
+        #         "value": value_targets,
+        #           -> value_targets.shape == (n,)
+        #     },
+        #     {
+        #         "policy": policy_weights,
+        #         "value": value_weights,
+        #     },
+        # )
+        # ---
+        # file_workers      -> max threads to load the *.npz games
+        # file_workers * 2  -> queue for loading the *.npz games
         yield from _parallel_game_samples(ordered_paths, file_workers)
 
+    # Contracted structure of the data returned by generator game_blocks
+    # If contract will be broken, TF will raise the error
+    # This is used further in tf.data.Dataset.from_generator to change data from NumPy values to TensorFlow
     game_signature = (
         (
             tf.TensorSpec(
@@ -216,22 +263,38 @@ def streaming_dual_head_npz_dataset(
             "value": tf.TensorSpec(shape=(None,), dtype=tf.float32),
         },
     )
+    # Get the 1 npz data, cast NumPy data to TensorFlow structures
+    # Unbatch it to 300 separate examples/training samples using unbatch
     dataset = tf.data.Dataset.from_generator(
         game_blocks,
         output_signature=game_signature,
     ).unbatch()
+
+    # Shuffles the data in assigned buffer with approprate size
+    # It shuffles the data from dataset already unbatched so e.g. 300 training samples are shuffeled
     if shuffle:
         dataset = dataset.shuffle(
             shuffle_buffer_size,
             seed=seed,
             reshuffle_each_iteration=True,
         )
+    # Fetch the data from shuffle buffer by batches
+    # One batch requires 6.8 *.npz games to be filled in
+    # BATCH_SIZE = 2048
+    # 2048 / 300 ≈ 6.8 npz files
     dataset = dataset.batch(batch_size, drop_remainder=False)
+    
+    # Calculate batches amount for training based on position count
+    # 11494130 / 2048 = 5613
+    # During the training we can see the actual step and time required for training
+    #   12/5613 ━━━━━━━━━━━━━━━━━━━━ 2:19:58 1s/step
     if position_count is not None:
         batch_count = math.ceil(position_count / batch_size)
         dataset = dataset.apply(
             tf.data.experimental.assert_cardinality(batch_count)
         )
+    # tf.data.AUTOTUNE automatically finds out the best value of buffer 
+    #   which needs to be filled in to provide enough data for GPU to consume
     return dataset.prefetch(tf.data.AUTOTUNE)
 
 

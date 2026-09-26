@@ -20,9 +20,14 @@ COLS = 30
 DEFAULT_SIMULATIONS = 128
 DEFAULT_MOVE_DELAY = 0.4
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 8002
+DEFAULT_PORT = 8005
+# 8002 -> now 60s
 SIMULATION_SECONDS = 30
-C_PUCT = 1.5
+# 8003 -> 1.0
+# 8002 -> 1.5
+# 8004 -> 2.0
+# 8005 -> 2.5
+C_PUCT = 2.5
 TRAINING_DATA_DIRECTORY = (
     Path(__file__).resolve().parent / "training_data" / "neural_mcts"
 )

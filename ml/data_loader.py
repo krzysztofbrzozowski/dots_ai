@@ -24,7 +24,7 @@ STREAMING_OPTIONAL_FIELDS = (
 
 
 def game_to_samples(game):
-    """Convert one loaded game into model inputs and sparse class labels."""
+    """Convert one loaded game into model inputs and sparse value targets."""
     # Copy loaded game (np arrays) object to local one
     # Boards -> each move board state
     # PLAYER_1 = 1
@@ -126,8 +126,8 @@ def game_to_samples(game):
     # Populate result e.g. [-1, 1, -1...]
     result_for_current_player = int(game["final_result"]) * next_players
     # Change result to sparse_categorical_crossentropy -> 0 lose, 1 draw, 2 win
-    labels = (result_for_current_player + 1).astype(np.int64)
-    return (board_samples, score_features), labels
+    value_targets = (result_for_current_player + 1).astype(np.int64)
+    return (board_samples, score_features), value_targets
 
 
 def load_game_samples(path):
@@ -171,7 +171,7 @@ def _position_count(path):
 
 
 def count_game_positions(game_paths, worker_count=4):
-    """Count positions across NPZ games with bounded parallel file access."""
+    """Count positions across NPZ games with bounded parallel file access"""
 
     paths = tuple(Path(path) for path in game_paths)
     if not paths:
@@ -210,7 +210,7 @@ def count_game_positions(game_paths, worker_count=4):
 
 
 def split_game_paths(directory, validation_fraction=0.2, seed=42, test_fraction=0.0):
-    """Shuffle and split complete games without leaking positions between sets."""
+    """Shuffle and split complete games without leaking positions between sets"""
     if not 0 < validation_fraction < 1:
         raise ValueError("validation_fraction must be between 0 and 1")
     if not 0 <= test_fraction < 1:
@@ -245,7 +245,7 @@ def load_many_game_samples(paths):
     loaded = [load_game_samples(path) for path in paths]
     board_samples = np.concatenate([item[0][0] for item in loaded], axis=0)
     score_features = np.concatenate([item[0][1] for item in loaded], axis=0)
-    labels = np.concatenate([item[1] for item in loaded], axis=0)
+    value_targets = np.concatenate([item[1] for item in loaded], axis=0)
     # e.g.
     # board_samples.shape
     # (295, 10, 10, 5)
@@ -264,7 +264,7 @@ def load_many_game_samples(paths):
     # 295 -> one score pair for each position
     # 2   -> [current player's score, opponent's score]
 
-    # labels.shape
+    # value_targets.shape
     # (295,)
     # 295 -> one value label for each position
     # Each label describes the final game result from the perspective
@@ -272,7 +272,7 @@ def load_many_game_samples(paths):
     # 0 -> loss
     # 1 -> draw
     # 2 -> win
-    return (board_samples, score_features), labels
+    return (board_samples, score_features), value_targets
 
 
 def policy_targets_for_game(game, board_shape):
@@ -342,16 +342,16 @@ def load_dual_head_game_samples(path):
     """Load one NPZ as one game-sized dual-head training sample block."""
 
     game = load_streaming_game(path)
-    inputs, value_labels = game_to_samples(game)
+    inputs, value_targets = game_to_samples(game)
     board_shape = inputs[0].shape[1:3]
     policy_targets, policy_weights = policy_targets_for_game(game, board_shape)
     targets = {
         "policy": policy_targets,
-        "value": value_labels,
+        "value": value_targets,
     }
     sample_weights = {
         "policy": policy_weights,
-        "value": np.ones(len(value_labels), dtype=np.float32),
+        "value": np.ones(len(value_targets), dtype=np.float32),
     }
     return inputs, targets, sample_weights
 
@@ -395,26 +395,29 @@ def load_policy_targets(game_paths, expected_sample_count, board_shape):
     return policy_targets, policy_weights
 
 
-def policy_and_value_heads_targets(game_paths, value_dataset):
+def policy_and_value_heads_targets(game_paths, value_data):
     """Attach policy targets and independent head weights to value samples."""
     # inputs = (
     #     board_samples, 
     #     score_features,
     # )
-    # value_labels = labels
-    inputs, value_labels = value_dataset
+    inputs, value_targets = value_data
     # inputs[0].shape
     # (295, 10, 10, 5)
     # inputs[0].shape[1:3] -> 10, 10
     board_shape = inputs[0].shape[1:3]
-    policy_targets, policy_weights = load_policy_targets(game_paths, len(value_labels), board_shape)
+    policy_targets, policy_weights = load_policy_targets(
+        game_paths,
+        len(value_targets),
+        board_shape,
+    )
     targets = {
         "policy": policy_targets,
-        "value": value_labels,
+        "value": value_targets,
     }
     sample_weights = {
         "policy": policy_weights,
-        "value": np.ones(len(value_labels), dtype=np.float32),
+        "value": np.ones(len(value_targets), dtype=np.float32),
     }
     return inputs, targets, sample_weights
 

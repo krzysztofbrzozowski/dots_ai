@@ -108,7 +108,7 @@ def audit_collection(directory):
     trajectories = set()
     positions = set()
     later_positions = set()
-    label_counts = np.zeros(3, dtype=np.int64)
+    value_target_counts = np.zeros(3, dtype=np.int64)
     search_counts = []
     early_search_counts = []
     legal_counts = []
@@ -136,7 +136,7 @@ def audit_collection(directory):
         source_seeds.add((source_id, seed))
         opening_lengths[len(record["opening_moves"])] += 1
         game = load_self_play_game(path)
-        (board_samples, score_features), labels = game_to_samples(game)
+        (board_samples, score_features), value_targets = game_to_samples(game)
         if (
             board_samples.dtype != np.float32
             or board_samples.shape[1:] != (config.rows, config.cols, 5)
@@ -144,7 +144,7 @@ def audit_collection(directory):
             or score_features.shape[1:] != (2,)
         ):
             raise ValueError(f"{path.name}: incompatible value-model input")
-        label_counts += np.bincount(labels, minlength=3)
+        value_target_counts += np.bincount(value_targets, minlength=3)
         signature = bytes([record["starting_player"] + 1]) + game["selected_actions"].tobytes()
         trajectories.add(hashlib.sha256(signature).hexdigest())
         for board_sample, scores in zip(board_samples, score_features):
@@ -231,7 +231,7 @@ def audit_collection(directory):
         "unique_trajectories": len(trajectories),
         "unique_canonical_positions": len(positions),
         "duplicate_positions_after_10_dots": later_count - len(later_positions),
-        "labels_loss_draw_win": label_counts.tolist(),
+        "value_targets_loss_draw_win": value_target_counts.tolist(),
         "rollouts": sum(record["rollouts"] for record in records),
         "median_rollouts_per_search": float(np.median(search_counts)) if search_counts else 0,
         "median_rollouts_first_20_moves": float(np.median(early_search_counts)) if early_search_counts else 0,

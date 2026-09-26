@@ -67,9 +67,9 @@ def test_training_and_prediction_use_matching_board_and_scalar_score_inputs():
         "legal_masks": np.ones((2, 2, 2), dtype=np.uint8),
         "final_result": np.asarray(1, dtype=np.int8),
     }
-    (board_samples, score_features), labels = game_to_samples(game)
+    (board_samples, score_features), value_targets = game_to_samples(game)
 
-    np.testing.assert_array_equal(labels, [2, 0])
+    np.testing.assert_array_equal(value_targets, [2, 0])
     assert board_samples.shape == (2, 2, 2, 5)
     np.testing.assert_allclose(score_features, [[0.5, 0.25], [1.0, 0.75]])
 
@@ -280,9 +280,9 @@ def test_random_augmentation_preserves_shape_targets_and_discrete_values():
 def test_batched_array_dataset_is_finite_and_preserves_every_sample():
     board_samples = np.arange(35, dtype=np.float32).reshape(5, 7)
     score_features = np.arange(10, dtype=np.float32).reshape(5, 2)
-    labels = np.arange(5, dtype=np.int64)
+    value_targets = np.arange(5, dtype=np.int64)
     dataset = batched_array_dataset(
-        (board_samples, score_features), labels, batch_size=2
+        (board_samples, score_features), value_targets, batch_size=2
     )
 
     batches = list(dataset.as_numpy_iterator())
@@ -297,8 +297,8 @@ def test_batched_array_dataset_is_finite_and_preserves_every_sample():
         score_features,
     )
     np.testing.assert_array_equal(
-        np.concatenate([batch_labels for _, batch_labels in batches]),
-        labels,
+        np.concatenate([batch_targets for _, batch_targets in batches]),
+        value_targets,
     )
 
 
