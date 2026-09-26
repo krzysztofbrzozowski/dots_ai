@@ -48,16 +48,17 @@ FILE_WORKERS = 10
 # observed total near 42-45 GB without changing the optimizer batch size.
 SHUFFLE_BUFFER_MEMORY_GIB = 32
 BYTES_PER_POSITION = (
-    # 30 x 30 x 5 x 4BYTES(float32) -> 
-    #    my_dots,
-    #    opponent_dots,
-    #    my_territory,
-    #    opponent_territory,
-    #    game["legal_masks"],
+    # Board input: 30 x 30 cells x 5 channels x 4 bytes (float32).
+    # The channels are my dots, opponent dots, my territory,
+    # opponent territory, and the legal-move mask.
     BOARD_SHAPE[0] * BOARD_SHAPE[1] * 5 * 4
+    # Score input: my score and the opponent's score as two float32 values.
     + 2 * 4
+    # Policy target: one float32 value for each of the 30 x 30 actions.
     + BOARD_SHAPE[0] * BOARD_SHAPE[1] * 4
+    # Value target: one int64 class (0=loss, 1=draw, 2=win).
     + 8
+    # Sample weights: one float32 weight for policy and one for value.
     + 2 * 4
 )
 SHUFFLE_BUFFER_SIZE = int(
