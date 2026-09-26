@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f5f7" />
+    <meta name="description" content="Run rated Dots matches on a 25x25 board." />
+    <title>Dots — Elo arena</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/workspace-assets/analysis.css?v=20260922-monochrome" />
+    <link rel="stylesheet" href="/assets/arena.css?v=2" />
+    <script type="module" src="/assets/arena.js?v=2"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div>
+          <h1>Dots</h1>
+          <p>Elo arena</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <span class="local-badge"><i aria-hidden="true"></i>Local workspace</span>
+        <span class="arena-badge">25 × 25 rated play</span>
+      </div>
+    </header>
+
+    <main class="analysis-shell">
+      <section class="game-overview" aria-labelledby="game-title">
+        <div class="game-identity">
+          <p class="eyebrow"><span class="section-index">01 /</span> Rated match workspace</p>
+          <h2 id="game-title">Every match, ranked.</h2>
+          <p class="game-subtitle">Pair classic MCTS, neural MCTS, or a human player.</p>
+        </div>
+
+        <div class="overview-metrics" aria-label="Match summary">
+          <div><span>Board</span><strong>25 × 25</strong></div>
+          <div><span>Moves</span><strong id="move-count">0</strong></div>
+          <div><span>Result</span><strong id="summary-result">—</strong></div>
+          <div><span>Games</span><strong id="match-count">0</strong></div>
+        </div>
+      </section>
+
+      <section class="workspace arena-workspace" aria-label="Elo arena workspace">
+        <article class="board-panel">
+          <div class="panel-heading board-heading">
+            <div>
+              <p class="eyebrow"><span class="section-index">03 /</span> Live position</p>
+              <h2 id="match-title">Board state</h2>
+            </div>
+            <span id="turn-indicator" class="player-pill">No active match</span>
+          </div>
+
+          <div id="board-shell" class="board-stage arena-board-stage">
+            <canvas id="arena-board" role="img" aria-label="Dots 25 by 25 board">
+              Your browser does not support HTML Canvas.
+            </canvas>
+            <div class="board-hint" id="board-hint">Start a match to activate the board.</div>
+          </div>
+
+          <div class="board-legend" aria-label="Board legend">
+            <span><i class="legend-dot player-one"></i>Player 1</span>
+            <span><i class="legend-dot player-two"></i>Player 2</span>
+            <span><i class="legend-ring selected"></i>Last move</span>
+          </div>
+
+          <div class="overlay-caption">
+            <span id="position-caption">Live rated position · player-to-move perspective</span>
+            <span>Ratings and NPZ update after completed or adjudicated games</span>
+          </div>
+
+          <section class="match-score" aria-label="Players and score">
+            <div class="match-player player-one-card">
+              <span>Player 1 · starts</span>
+              <strong id="player-1-name">Player 1</strong>
+              <b id="score-1">0</b>
+            </div>
+            <div class="match-player player-two-card">
+              <span>Player 2</span>
+              <strong id="player-2-name">Player 2</strong>
+              <b id="score-2">0</b>
+            </div>
+          </section>
+
+          <section class="frame-summary" aria-label="Current match summary">
+            <div><span>Last action</span><strong id="last-action">—</strong></div>
+            <div><span>Score</span><strong id="score-summary">0 — 0</strong></div>
+            <div><span>Legal moves</span><strong id="legal-moves">900</strong></div>
+            <div><span>Moves</span><strong id="board-move-count">0</strong></div>
+            <div><span>Status</span><strong id="match-status">Idle</strong></div>
+            <div><span>Result</span><strong id="board-result">—</strong></div>
+          </section>
+        </article>
+
+        <aside class="timeline-panel arena-sidebar" aria-labelledby="arena-controls-title">
+          <div class="panel-heading timeline-heading">
+            <div>
+              <p class="eyebrow"><span class="section-index">02 /</span> Arena controls</p>
+              <h2 id="arena-controls-title">Players</h2>
+            </div>
+            <span class="frame-counter">25 × 25</span>
+          </div>
+
+          <div class="arena-control-form">
+            <label class="arena-player-field">
+              <span>Player 1 · starts</span>
+              <select id="player-1"></select>
+              <input id="human-name-1" maxlength="40" placeholder="Human player name" hidden />
+            </label>
+            <div class="versus-label">VS</div>
+            <label class="arena-player-field">
+              <span>Player 2</span>
+              <select id="player-2"></select>
+              <input id="human-name-2" maxlength="40" placeholder="Human player name" hidden />
+            </label>
+            <div class="match-actions">
+              <button class="start-match-button" id="start-match" type="button">Start rated match</button>
+              <button class="end-match-button" id="end-match" type="button" disabled>End match</button>
+            </div>
+            <small>Elo starts at 1200 with K = 32.</small>
+          </div>
+
+          <div class="arena-sidebar-scroll">
+            <section class="arena-sidebar-section" aria-labelledby="ranking-title">
+              <div class="arena-section-heading">
+                <div>
+                  <p class="eyebrow">Elo leaderboard</p>
+                  <h3 id="ranking-title">Ranking</h3>
+                </div>
+              </div>
+              <div class="ranking-extremes">
+                <div><span>Best</span><strong id="best-player">—</strong><small id="best-rating">No games</small></div>
+                <div><span>Worst</span><strong id="worst-player">—</strong><small id="worst-rating">No games</small></div>
+              </div>
+              <div class="ranking-list" id="ranking-list">
+                <p class="arena-empty">The leaderboard will appear after the first rated game.</p>
+              </div>
+            </section>
+
+            <section class="arena-sidebar-section" aria-labelledby="moves-title">
+              <div class="arena-section-heading">
+                <div>
+                  <p class="eyebrow">Decision trail</p>
+                  <h3 id="moves-title">Recent moves</h3>
+                </div>
+              </div>
+              <ol class="moves-list" id="moves-list">
+                <li class="arena-empty">No moves yet.</li>
+              </ol>
+            </section>
+          </div>
+        </aside>
+      </section>
+
+      <section id="status" class="status-bar" aria-live="polite" aria-atomic="true">
+        <span class="status-indicator" aria-hidden="true"></span>
+        <p id="status-message">Connecting to the arena…</p>
+      </section>
+    </main>
+  </body>
+</html>

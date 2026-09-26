@@ -98,7 +98,7 @@ class MCTSNode(ABC):
     def release_path(self):
         pass
 
-    def best_child(self, c_param=0.8):
+    def best_child(self, c_param=1.0):
         # Try with 0.4-0.8 param, looks like 0.8 found best enclosures
         # c_param controls how strongly MCTS prefers exploration
         # 1.4 is a common default value because it is close to sqrt(2) ≈ 1.414
