@@ -2,5 +2,74 @@
   "schema_version": 1,
   "base_rating": 1200.0,
   "k_factor": 32.0,
-  "pools": {}
+  "pools": {
+    "25x25": {
+      "players": {
+        "human:brzozok:0b178be479": {
+          "id": "human:brzozok:0b178be479",
+          "display_name": "brzozok",
+          "kind": "human",
+          "rating": 1184.0,
+          "games": 1,
+          "wins": 0,
+          "draws": 0,
+          "losses": 1
+        },
+        "neural-mcts-30s-c1p5-25x25-v1": {
+          "id": "neural-mcts-30s-c1p5-25x25-v1",
+          "display_name": "Neural MCTS · 30 s · 25x25 v1",
+          "kind": "neural_mcts",
+          "rating": 1231.26,
+          "games": 2,
+          "wins": 2,
+          "draws": 0,
+          "losses": 0
+        },
+        "classic-mcts-90s-w14": {
+          "id": "classic-mcts-90s-w14",
+          "display_name": "Classic MCTS · 90 s · 14 workers",
+          "kind": "classic_mcts",
+          "rating": 1184.74,
+          "games": 1,
+          "wins": 0,
+          "draws": 0,
+          "losses": 1
+        }
+      },
+      "matches": [
+        {
+          "id": "8668cf8338894a7aa8a70ae7a20b16f9",
+          "completed_at_utc": "2026-09-26T20:53:51.020007+00:00",
+          "player_1": "human:brzozok:0b178be479",
+          "player_2": "neural-mcts-30s-c1p5-25x25-v1",
+          "result": -1,
+          "termination": "stopped",
+          "ratings_before": {
+            "human:brzozok:0b178be479": 1200.0,
+            "neural-mcts-30s-c1p5-25x25-v1": 1200.0
+          },
+          "ratings_after": {
+            "human:brzozok:0b178be479": 1184.0,
+            "neural-mcts-30s-c1p5-25x25-v1": 1216.0
+          }
+        },
+        {
+          "id": "e2c5d3e62cf148a7ba01074f1df979cc",
+          "completed_at_utc": "2026-09-27T01:12:29.426011+00:00",
+          "player_1": "classic-mcts-90s-w14",
+          "player_2": "neural-mcts-30s-c1p5-25x25-v1",
+          "result": -1,
+          "termination": "completed",
+          "ratings_before": {
+            "classic-mcts-90s-w14": 1200.0,
+            "neural-mcts-30s-c1p5-25x25-v1": 1216.0
+          },
+          "ratings_after": {
+            "classic-mcts-90s-w14": 1184.74,
+            "neural-mcts-30s-c1p5-25x25-v1": 1231.26
+          }
+        }
+      ]
+    }
+  }
 }
