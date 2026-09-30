@@ -1,3 +1,57 @@
+## 25x25 dual-head model summary
+
+Model file: `ml/models/25x25_088622_new_data_dual_head_v1.keras`
+
+The standard parameter count for the model itself is **304,772**. Keras reports
+**911,854** parameters when the saved Adam optimizer state is included.
+
+### Parameter count
+
+| Type | Count |
+| --- | ---: |
+| Model parameters | **304,772** |
+| Trainable parameters | **303,540** |
+| Non-trainable parameters | **1,232** |
+| Adam optimizer state | 607,082 |
+| Total stored in the training checkpoint | **911,854** |
+
+### Architecture
+
+The model is named `dots_dual_head_human_sgf_v1` and contains 48 layers,
+including 12 convolutional layers, 11 batch-normalization layers, four residual
+blocks, and two dense layers. All computations and stored weights use
+`float32`.
+
+The model accepts two inputs:
+
+- `board`: `(batch, 25, 25, 5)`;
+- `scores`: `(batch, 2)`.
+
+The two score values are expanded into two `25 x 25` planes and concatenated
+with the board input. The shared trunk therefore receives seven channels. It
+starts with a 64-channel `3 x 3` convolution and continues through four
+64-channel residual blocks without reducing the board resolution.
+
+The network has two outputs:
+
+- `policy`: `(batch, 625)`, containing one logit for each board position;
+- `value`: `(batch, 3)`, containing softmax probabilities for three outcome
+  classes.
+
+The shared stem and residual trunk contain 301,248 parameters, the policy head
+contains 2,209 parameters, and the value head contains 1,315 parameters. The
+value head uses global average pooling and dropout with a rate of `0.2`.
+
+### Saved training configuration
+
+- Optimizer: Adam with learning rate `0.0003` and `clipnorm=1.0`.
+- Policy loss: categorical cross-entropy with logits.
+- Value loss: sparse categorical cross-entropy.
+- Loss weights: `1.0` for both heads.
+- Metrics: policy top-1 and top-5 accuracy; value accuracy.
+- Saved optimizer iteration: 41,870.
+- Checkpoint size: approximately 3.67 MiB.
+
 ```python
 inputs = keras.Input(shape=(10, 10, 7))
 
