@@ -1,0 +1,1879 @@
+{
+  "date_utc": "2026-10-19T19:44:04Z",
+  "image": "dots-mcts-single-cpu:20261019",
+  "inference_seconds": 5,
+  "search_seconds": 30,
+  "fixed_simulations": 1000,
+  "note": "Each case uses a fresh container/process. One run per case; peaks include runtime initialization.",
+  "runs": [
+    {
+      "phase": "inference",
+      "method": "keras_predict",
+      "batch_size": 1,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 20844544,
+          "VmRSS": 20787200,
+          "RssAnon": 11419648,
+          "RssFile": 9367552,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 20844544,
+          "memory.current": 12939264,
+          "memory.peak": 13520896,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 11419648,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 415186944,
+          "VmRSS": 415186944,
+          "RssAnon": 177274880,
+          "RssFile": 237912064,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 415023104,
+          "memory.current": 187117568,
+          "memory.peak": 187117568,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 177274880,
+            "file": 126976,
+            "kernel": 8880128
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 431603712,
+          "VmRSS": 427868160,
+          "RssAnon": 186920960,
+          "RssFile": 240947200,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 431603712,
+          "memory.current": 200859648,
+          "memory.peak": 204677120,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 186920960,
+            "file": 3977216,
+            "kernel": 9023488
+          }
+        },
+        "warmed": {
+          "VmHWM": 447512576,
+          "VmRSS": 447512576,
+          "RssAnon": 200118272,
+          "RssFile": 247394304,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 447356928,
+          "memory.current": 214192128,
+          "memory.peak": 214237184,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 200118272,
+            "file": 4001792,
+            "kernel": 9138176
+          }
+        },
+        "after_work": {
+          "VmHWM": 452259840,
+          "VmRSS": 452259840,
+          "RssAnon": 204865536,
+          "RssFile": 247394304,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 452161536,
+          "memory.current": 218939392,
+          "memory.peak": 219017216,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 204865536,
+            "file": 4001792,
+            "kernel": 9179136
+          }
+        },
+        "after_gc": {
+          "VmHWM": 452259840,
+          "VmRSS": 452259840,
+          "RssAnon": 204865536,
+          "RssFile": 247394304,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 452161536,
+          "memory.current": 218939392,
+          "memory.peak": 219017216,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 204865536,
+            "file": 4001792,
+            "kernel": 9179136
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.018828794000001,
+      "calls": 233,
+      "positions": 233
+    },
+    {
+      "phase": "inference",
+      "method": "predict_on_batch",
+      "batch_size": 1,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21499904,
+          "VmRSS": 21499904,
+          "RssAnon": 12128256,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21323776,
+          "memory.current": 13983744,
+          "memory.peak": 13983744,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12128256,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413282304,
+          "VmRSS": 413282304,
+          "RssAnon": 175366144,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413204480,
+          "memory.current": 185683968,
+          "memory.peak": 185683968,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175370240,
+            "file": 126976,
+            "kernel": 8884224
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429703168,
+          "VmRSS": 425967616,
+          "RssAnon": 185016320,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429703168,
+          "memory.current": 199426048,
+          "memory.peak": 203194368,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 185016320,
+            "file": 3977216,
+            "kernel": 9035776
+          }
+        },
+        "warmed": {
+          "VmHWM": 443801600,
+          "VmRSS": 443801600,
+          "RssAnon": 196796416,
+          "RssFile": 247005184,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 443621376,
+          "memory.current": 211075072,
+          "memory.peak": 211075072,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 196796416,
+            "file": 4001792,
+            "kernel": 9043968
+          }
+        },
+        "after_work": {
+          "VmHWM": 445177856,
+          "VmRSS": 445177856,
+          "RssAnon": 198172672,
+          "RssFile": 247005184,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 445063168,
+          "memory.current": 212336640,
+          "memory.peak": 212385792,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 197943296,
+            "file": 4001792,
+            "kernel": 9039872
+          }
+        },
+        "after_gc": {
+          "VmHWM": 445181952,
+          "VmRSS": 445181952,
+          "RssAnon": 198176768,
+          "RssFile": 247005184,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 445063168,
+          "memory.current": 212336640,
+          "memory.peak": 212385792,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 197943296,
+            "file": 4001792,
+            "kernel": 9039872
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.004063586000029,
+      "calls": 1070,
+      "positions": 1070
+    },
+    {
+      "phase": "inference",
+      "method": "direct_eager",
+      "batch_size": 1,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 20856832,
+          "VmRSS": 20795392,
+          "RssAnon": 11423744,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 20856832,
+          "memory.current": 13615104,
+          "memory.peak": 14139392,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 11423744,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413274112,
+          "VmRSS": 413274112,
+          "RssAnon": 175357952,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413085696,
+          "memory.current": 185688064,
+          "memory.peak": 185692160,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175357952,
+            "file": 126976,
+            "kernel": 8867840
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429666304,
+          "VmRSS": 425971712,
+          "RssAnon": 185020416,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429666304,
+          "memory.current": 199135232,
+          "memory.peak": 202985472,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 185020416,
+            "file": 3977216,
+            "kernel": 8998912
+          }
+        },
+        "warmed": {
+          "VmHWM": 443527168,
+          "VmRSS": 443527168,
+          "RssAnon": 199573504,
+          "RssFile": 243953664,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 443523072,
+          "memory.current": 213766144,
+          "memory.peak": 213766144,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 199573504,
+            "file": 4001792,
+            "kernel": 9027584
+          }
+        },
+        "after_work": {
+          "VmHWM": 451219456,
+          "VmRSS": 451219456,
+          "RssAnon": 207265792,
+          "RssFile": 243953664,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 451125248,
+          "memory.current": 221630464,
+          "memory.peak": 221630464,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 207265792,
+            "file": 4001792,
+            "kernel": 9048064
+          }
+        },
+        "after_gc": {
+          "VmHWM": 451219456,
+          "VmRSS": 451219456,
+          "RssAnon": 207265792,
+          "RssFile": 243953664,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 451125248,
+          "memory.current": 221630464,
+          "memory.peak": 221630464,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 207265792,
+            "file": 4001792,
+            "kernel": 9048064
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.00095658500004,
+      "calls": 405,
+      "positions": 405
+    },
+    {
+      "phase": "inference",
+      "method": "compiled",
+      "batch_size": 1,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21487616,
+          "VmRSS": 21487616,
+          "RssAnon": 12115968,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21311488,
+          "memory.current": 14364672,
+          "memory.peak": 14364672,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12115968,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 415178752,
+          "VmRSS": 415178752,
+          "RssAnon": 177262592,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 415002624,
+          "memory.current": 187985920,
+          "memory.peak": 187985920,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 177266688,
+            "file": 126976,
+            "kernel": 8888320
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 431575040,
+          "VmRSS": 427859968,
+          "RssAnon": 186908672,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 431575040,
+          "memory.current": 201719808,
+          "memory.peak": 205496320,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 186908672,
+            "file": 3977216,
+            "kernel": 9019392
+          }
+        },
+        "warmed": {
+          "VmHWM": 446287872,
+          "VmRSS": 446287872,
+          "RssAnon": 199282688,
+          "RssFile": 247005184,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 446169088,
+          "memory.current": 213966848,
+          "memory.peak": 213966848,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 199282688,
+            "file": 4001792,
+            "kernel": 9043968
+          }
+        },
+        "after_work": {
+          "VmHWM": 447291392,
+          "VmRSS": 447291392,
+          "RssAnon": 200286208,
+          "RssFile": 247005184,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 447217664,
+          "memory.current": 214917120,
+          "memory.peak": 214917120,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 200200192,
+            "file": 4001792,
+            "kernel": 9039872
+          }
+        },
+        "after_gc": {
+          "VmHWM": 447295488,
+          "VmRSS": 447295488,
+          "RssAnon": 200290304,
+          "RssFile": 247005184,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 447217664,
+          "memory.current": 214917120,
+          "memory.peak": 214917120,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 200200192,
+            "file": 4001792,
+            "kernel": 9039872
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.0033706269998675,
+      "calls": 1049,
+      "positions": 1049
+    },
+    {
+      "phase": "inference",
+      "method": "compiled",
+      "batch_size": 4,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21475328,
+          "VmRSS": 21475328,
+          "RssAnon": 12111872,
+          "RssFile": 9363456,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21299200,
+          "memory.current": 14397440,
+          "memory.peak": 14397440,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12111872,
+            "file": 12288,
+            "kernel": 720896
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413249536,
+          "VmRSS": 413249536,
+          "RssAnon": 175341568,
+          "RssFile": 237907968,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413061120,
+          "memory.current": 185925632,
+          "memory.peak": 185925632,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175345664,
+            "file": 126976,
+            "kernel": 8876032
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429666304,
+          "VmRSS": 425943040,
+          "RssAnon": 184999936,
+          "RssFile": 240943104,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429666304,
+          "memory.current": 199655424,
+          "memory.peak": 203436032,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 184999936,
+            "file": 3977216,
+            "kernel": 9007104
+          }
+        },
+        "warmed": {
+          "VmHWM": 448311296,
+          "VmRSS": 448311296,
+          "RssAnon": 201248768,
+          "RssFile": 247062528,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 448184320,
+          "memory.current": 215838720,
+          "memory.peak": 215838720,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 201248768,
+            "file": 4001792,
+            "kernel": 9039872
+          }
+        },
+        "after_work": {
+          "VmHWM": 448487424,
+          "VmRSS": 448487424,
+          "RssAnon": 201424896,
+          "RssFile": 247062528,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 448446464,
+          "memory.current": 215961600,
+          "memory.peak": 216100864,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 201379840,
+            "file": 4001792,
+            "kernel": 9031680
+          }
+        },
+        "after_gc": {
+          "VmHWM": 448487424,
+          "VmRSS": 448487424,
+          "RssAnon": 201424896,
+          "RssFile": 247062528,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 448446464,
+          "memory.current": 215961600,
+          "memory.peak": 216100864,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 201379840,
+            "file": 4001792,
+            "kernel": 9031680
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.017253586000152,
+      "calls": 273,
+      "positions": 1092
+    },
+    {
+      "phase": "inference",
+      "method": "compiled",
+      "batch_size": 8,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21483520,
+          "VmRSS": 21483520,
+          "RssAnon": 12115968,
+          "RssFile": 9367552,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21307392,
+          "memory.current": 14393344,
+          "memory.peak": 14393344,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12115968,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413261824,
+          "VmRSS": 413261824,
+          "RssAnon": 175349760,
+          "RssFile": 237912064,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413081600,
+          "memory.current": 185655296,
+          "memory.peak": 185655296,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175353856,
+            "file": 126976,
+            "kernel": 8876032
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429674496,
+          "VmRSS": 425951232,
+          "RssAnon": 185004032,
+          "RssFile": 240947200,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429674496,
+          "memory.current": 199376896,
+          "memory.peak": 203214848,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 185004032,
+            "file": 3977216,
+            "kernel": 9015296
+          }
+        },
+        "warmed": {
+          "VmHWM": 449847296,
+          "VmRSS": 449847296,
+          "RssAnon": 202780672,
+          "RssFile": 247066624,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 449765376,
+          "memory.current": 217141248,
+          "memory.peak": 217141248,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 202780672,
+            "file": 4001792,
+            "kernel": 9048064
+          }
+        },
+        "after_work": {
+          "VmHWM": 451088384,
+          "VmRSS": 451088384,
+          "RssAnon": 204021760,
+          "RssFile": 247066624,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 451076096,
+          "memory.current": 218451968,
+          "memory.peak": 218451968,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 204021760,
+            "file": 4001792,
+            "kernel": 9039872
+          }
+        },
+        "after_gc": {
+          "VmHWM": 451092480,
+          "VmRSS": 451092480,
+          "RssAnon": 204025856,
+          "RssFile": 247066624,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 451076096,
+          "memory.current": 218451968,
+          "memory.peak": 218451968,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 204021760,
+            "file": 4001792,
+            "kernel": 9039872
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.01353737799991,
+      "calls": 138,
+      "positions": 1104
+    },
+    {
+      "phase": "inference",
+      "method": "compiled",
+      "batch_size": 16,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21475328,
+          "VmRSS": 21475328,
+          "RssAnon": 12115968,
+          "RssFile": 9359360,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21299200,
+          "memory.current": 14573568,
+          "memory.peak": 14573568,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12115968,
+            "file": 12288,
+            "kernel": 720896
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413249536,
+          "VmRSS": 413249536,
+          "RssAnon": 175345664,
+          "RssFile": 237903872,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413175808,
+          "memory.current": 186101760,
+          "memory.peak": 186101760,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175345664,
+            "file": 126976,
+            "kernel": 8892416
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429662208,
+          "VmRSS": 425926656,
+          "RssAnon": 184987648,
+          "RssFile": 240939008,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429662208,
+          "memory.current": 199843840,
+          "memory.peak": 203612160,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 184987648,
+            "file": 3977216,
+            "kernel": 9023488
+          }
+        },
+        "warmed": {
+          "VmHWM": 456163328,
+          "VmRSS": 445284352,
+          "RssAnon": 198225920,
+          "RssFile": 247058432,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 456163328,
+          "memory.current": 213504000,
+          "memory.peak": 224141312,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 198225920,
+            "file": 4001792,
+            "kernel": 9048064
+          }
+        },
+        "after_work": {
+          "VmHWM": 458551296,
+          "VmRSS": 458551296,
+          "RssAnon": 211492864,
+          "RssFile": 247058432,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 458547200,
+          "memory.current": 227557376,
+          "memory.peak": 227749888,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 211480576,
+            "file": 4001792,
+            "kernel": 9060352
+          }
+        },
+        "after_gc": {
+          "VmHWM": 458551296,
+          "VmRSS": 458551296,
+          "RssAnon": 211492864,
+          "RssFile": 247058432,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 458547200,
+          "memory.current": 227557376,
+          "memory.peak": 227749888,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 211480576,
+            "file": 4001792,
+            "kernel": 9060352
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.008451419000039,
+      "calls": 69,
+      "positions": 1104
+    },
+    {
+      "phase": "inference",
+      "method": "compiled",
+      "batch_size": 32,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21475328,
+          "VmRSS": 21475328,
+          "RssAnon": 12115968,
+          "RssFile": 9359360,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21299200,
+          "memory.current": 14077952,
+          "memory.peak": 14077952,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12115968,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413249536,
+          "VmRSS": 413249536,
+          "RssAnon": 175345664,
+          "RssFile": 237903872,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413175808,
+          "memory.current": 185602048,
+          "memory.peak": 185602048,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175345664,
+            "file": 126976,
+            "kernel": 8892416
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429666304,
+          "VmRSS": 425930752,
+          "RssAnon": 184991744,
+          "RssFile": 240939008,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429666304,
+          "memory.current": 199344128,
+          "memory.peak": 203161600,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 184991744,
+            "file": 3977216,
+            "kernel": 9031680
+          }
+        },
+        "warmed": {
+          "VmHWM": 474382336,
+          "VmRSS": 459223040,
+          "RssAnon": 212164608,
+          "RssFile": 247058432,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 474382336,
+          "memory.current": 227913728,
+          "memory.peak": 243032064,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 212164608,
+            "file": 4001792,
+            "kernel": 9084928
+          }
+        },
+        "after_work": {
+          "VmHWM": 479494144,
+          "VmRSS": 459935744,
+          "RssAnon": 212877312,
+          "RssFile": 247058432,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 479494144,
+          "memory.current": 230162432,
+          "memory.peak": 249671680,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 212877312,
+            "file": 4001792,
+            "kernel": 9089024
+          }
+        },
+        "after_gc": {
+          "VmHWM": 479494144,
+          "VmRSS": 459935744,
+          "RssAnon": 212877312,
+          "RssFile": 247058432,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 479494144,
+          "memory.current": 230162432,
+          "memory.peak": 249671680,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 212877312,
+            "file": 4001792,
+            "kernel": 9089024
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.088909918999889,
+      "calls": 34,
+      "positions": 1088
+    },
+    {
+      "phase": "inference",
+      "method": "compiled",
+      "batch_size": 64,
+      "requested_seconds": 5.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21487616,
+          "VmRSS": 21487616,
+          "RssAnon": 12115968,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21385216,
+          "memory.current": 14032896,
+          "memory.peak": 14032896,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12115968,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413261824,
+          "VmRSS": 413261824,
+          "RssAnon": 175345664,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413077504,
+          "memory.current": 185556992,
+          "memory.peak": 185556992,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175345664,
+            "file": 126976,
+            "kernel": 8867840
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429662208,
+          "VmRSS": 425963520,
+          "RssAnon": 185012224,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429662208,
+          "memory.current": 199249920,
+          "memory.peak": 203116544,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 185012224,
+            "file": 3977216,
+            "kernel": 8998912
+          }
+        },
+        "warmed": {
+          "VmHWM": 521334784,
+          "VmRSS": 476844032,
+          "RssAnon": 229773312,
+          "RssFile": 247070720,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 521334784,
+          "memory.current": 244908032,
+          "memory.peak": 288808960,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 229773312,
+            "file": 4001792,
+            "kernel": 9093120
+          }
+        },
+        "after_work": {
+          "VmHWM": 521334784,
+          "VmRSS": 476844032,
+          "RssAnon": 229773312,
+          "RssFile": 247070720,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 521334784,
+          "memory.current": 244920320,
+          "memory.peak": 288808960,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 229773312,
+            "file": 4001792,
+            "kernel": 9093120
+          }
+        },
+        "after_gc": {
+          "VmHWM": 521334784,
+          "VmRSS": 476844032,
+          "RssAnon": 229773312,
+          "RssFile": 247070720,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 521334784,
+          "memory.current": 244920320,
+          "memory.peak": 288808960,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 229773312,
+            "file": 4001792,
+            "kernel": 9093120
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 5.223407710999936,
+      "calls": 18,
+      "positions": 1152
+    },
+    {
+      "phase": "search_timed",
+      "method": "keras_predict",
+      "batch_size": 1,
+      "requested_seconds": 30.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21458944,
+          "VmRSS": 21458944,
+          "RssAnon": 12099584,
+          "RssFile": 9359360,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21291008,
+          "memory.current": 13742080,
+          "memory.peak": 13959168,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12099584,
+            "file": 12288,
+            "kernel": 720896
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413270016,
+          "VmRSS": 413270016,
+          "RssAnon": 175366144,
+          "RssFile": 237903872,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413179904,
+          "memory.current": 185507840,
+          "memory.peak": 185507840,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175366144,
+            "file": 126976,
+            "kernel": 8888320
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429899776,
+          "VmRSS": 426164224,
+          "RssAnon": 185225216,
+          "RssFile": 240939008,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429899776,
+          "memory.current": 199249920,
+          "memory.peak": 203067392,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 185225216,
+            "file": 3977216,
+            "kernel": 9027584
+          }
+        },
+        "warmed": {
+          "VmHWM": 442265600,
+          "VmRSS": 442265600,
+          "RssAnon": 195018752,
+          "RssFile": 247246848,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 442105856,
+          "memory.current": 209330176,
+          "memory.peak": 209367040,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 195018752,
+            "file": 3977216,
+            "kernel": 9129984
+          }
+        },
+        "after_work": {
+          "VmHWM": 703795200,
+          "VmRSS": 703795200,
+          "RssAnon": 456548352,
+          "RssFile": 247246848,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 703672320,
+          "memory.current": 471584768,
+          "memory.peak": 471605248,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 456548352,
+            "file": 3977216,
+            "kernel": 9682944
+          }
+        },
+        "after_gc": {
+          "VmHWM": 703860736,
+          "VmRSS": 703860736,
+          "RssAnon": 456613888,
+          "RssFile": 247246848,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 703672320,
+          "memory.current": 471846912,
+          "memory.peak": 471846912,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 456548352,
+            "file": 3977216,
+            "kernel": 9682944
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 30.003415638999968,
+      "simulations": 1212,
+      "selected_action": [
+        12,
+        15
+      ],
+      "tree": {
+        "nodes": 753850,
+        "expanded_nodes": 1212,
+        "materialized_states": 1212
+      },
+      "root_visits_sha256": "f6c6ef1d10dd3e361b88a4eb7da5ca9b0b0d88abe796045c3dcd5f9a0116edfb"
+    },
+    {
+      "phase": "search_timed",
+      "method": "predict_on_batch",
+      "batch_size": 1,
+      "requested_seconds": 30.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21520384,
+          "VmRSS": 21520384,
+          "RssAnon": 12148736,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21405696,
+          "memory.current": 13946880,
+          "memory.peak": 13946880,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12148736,
+            "file": 12288,
+            "kernel": 716800
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413282304,
+          "VmRSS": 413282304,
+          "RssAnon": 175366144,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413196288,
+          "memory.current": 185454592,
+          "memory.peak": 185454592,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175370240,
+            "file": 126976,
+            "kernel": 8859648
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429674496,
+          "VmRSS": 425951232,
+          "RssAnon": 184999936,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429674496,
+          "memory.current": 199217152,
+          "memory.peak": 202964992,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 184999936,
+            "file": 3977216,
+            "kernel": 8998912
+          }
+        },
+        "warmed": {
+          "VmHWM": 440545280,
+          "VmRSS": 440545280,
+          "RssAnon": 193679360,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 440451072,
+          "memory.current": 207753216,
+          "memory.peak": 207753216,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 193679360,
+            "file": 3977216,
+            "kernel": 9003008
+          }
+        },
+        "after_work": {
+          "VmHWM": 1361125376,
+          "VmRSS": 1361125376,
+          "RssAnon": 1114259456,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 1360969728,
+          "memory.current": 1130172416,
+          "memory.peak": 1130176512,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 1114263552,
+            "file": 3977216,
+            "kernel": 10792960
+          }
+        },
+        "after_gc": {
+          "VmHWM": 1361137664,
+          "VmRSS": 1361137664,
+          "RssAnon": 1114271744,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 1360969728,
+          "memory.current": 1130172416,
+          "memory.peak": 1130176512,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 1114263552,
+            "file": 3977216,
+            "kernel": 10792960
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 30.003405346999898,
+      "simulations": 4426,
+      "selected_action": [
+        12,
+        15
+      ],
+      "tree": {
+        "nodes": 2748447,
+        "expanded_nodes": 4426,
+        "materialized_states": 4426
+      },
+      "root_visits_sha256": "50698722e6f56099c51c6ca570e7440a5df9c4e4460c819245e8b1d7d92de099"
+    },
+    {
+      "phase": "search_timed",
+      "method": "compiled",
+      "batch_size": 1,
+      "requested_seconds": 30.0,
+      "requested_simulations": null,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21549056,
+          "VmRSS": 21549056,
+          "RssAnon": 12177408,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21434368,
+          "memory.current": 14295040,
+          "memory.peak": 14295040,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12177408,
+            "file": 12288,
+            "kernel": 724992
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413265920,
+          "VmRSS": 413265920,
+          "RssAnon": 175349760,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413200384,
+          "memory.current": 185724928,
+          "memory.peak": 185724928,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175349760,
+            "file": 126976,
+            "kernel": 8880128
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429686784,
+          "VmRSS": 425963520,
+          "RssAnon": 185012224,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429686784,
+          "memory.current": 199446528,
+          "memory.peak": 203284480,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 185012224,
+            "file": 3977216,
+            "kernel": 9019392
+          }
+        },
+        "warmed": {
+          "VmHWM": 441049088,
+          "VmRSS": 441049088,
+          "RssAnon": 194183168,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 440856576,
+          "memory.current": 208560128,
+          "memory.peak": 208560128,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 194183168,
+            "file": 3977216,
+            "kernel": 9023488
+          }
+        },
+        "after_work": {
+          "VmHWM": 1361530880,
+          "VmRSS": 1361530880,
+          "RssAnon": 1114664960,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 1361375232,
+          "memory.current": 1131028480,
+          "memory.peak": 1131028480,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 1114664960,
+            "file": 3977216,
+            "kernel": 10817536
+          }
+        },
+        "after_gc": {
+          "VmHWM": 1361534976,
+          "VmRSS": 1361534976,
+          "RssAnon": 1114669056,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 1361375232,
+          "memory.current": 1131028480,
+          "memory.peak": 1131028480,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 1114664960,
+            "file": 3977216,
+            "kernel": 10817536
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 30.00381772200012,
+      "simulations": 4426,
+      "selected_action": [
+        12,
+        15
+      ],
+      "tree": {
+        "nodes": 2748447,
+        "expanded_nodes": 4426,
+        "materialized_states": 4426
+      },
+      "root_visits_sha256": "50698722e6f56099c51c6ca570e7440a5df9c4e4460c819245e8b1d7d92de099"
+    },
+    {
+      "phase": "search_fixed",
+      "method": "keras_predict",
+      "batch_size": 1,
+      "requested_seconds": null,
+      "requested_simulations": 1000,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21475328,
+          "VmRSS": 21475328,
+          "RssAnon": 12103680,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21303296,
+          "memory.current": 14663680,
+          "memory.peak": 14663680,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12103680,
+            "file": 12288,
+            "kernel": 733184
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413274112,
+          "VmRSS": 413274112,
+          "RssAnon": 175357952,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413196288,
+          "memory.current": 186191872,
+          "memory.peak": 186191872,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175362048,
+            "file": 126976,
+            "kernel": 8871936
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429666304,
+          "VmRSS": 425943040,
+          "RssAnon": 184991744,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429666304,
+          "memory.current": 199970816,
+          "memory.peak": 203702272,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 184991744,
+            "file": 3977216,
+            "kernel": 9011200
+          }
+        },
+        "warmed": {
+          "VmHWM": 442281984,
+          "VmRSS": 442281984,
+          "RssAnon": 195022848,
+          "RssFile": 247259136,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 442146816,
+          "memory.current": 210018304,
+          "memory.peak": 210051072,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 195022848,
+            "file": 3977216,
+            "kernel": 9125888
+          }
+        },
+        "after_work": {
+          "VmHWM": 665931776,
+          "VmRSS": 665931776,
+          "RssAnon": 418672640,
+          "RssFile": 247259136,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 665821184,
+          "memory.current": 433909760,
+          "memory.peak": 433926144,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 418672640,
+            "file": 3977216,
+            "kernel": 9592832
+          }
+        },
+        "after_gc": {
+          "VmHWM": 665931776,
+          "VmRSS": 665931776,
+          "RssAnon": 418672640,
+          "RssFile": 247259136,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 665821184,
+          "memory.current": 433860608,
+          "memory.peak": 435957760,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 418672640,
+            "file": 3977216,
+            "kernel": 9564160
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 25.14698280199991,
+      "simulations": 1000,
+      "selected_action": [
+        12,
+        15
+      ],
+      "tree": {
+        "nodes": 622315,
+        "expanded_nodes": 1000,
+        "materialized_states": 1000
+      },
+      "root_visits_sha256": "9150ee5345844c45f012eb447c66a99a93060d1f0239d080d0dffac96348594d"
+    },
+    {
+      "phase": "search_fixed",
+      "method": "predict_on_batch",
+      "batch_size": 1,
+      "requested_seconds": null,
+      "requested_simulations": 1000,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21524480,
+          "VmRSS": 21524480,
+          "RssAnon": 12152832,
+          "RssFile": 9371648,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21409792,
+          "memory.current": 14508032,
+          "memory.peak": 14508032,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12152832,
+            "file": 12288,
+            "kernel": 729088
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413282304,
+          "VmRSS": 413282304,
+          "RssAnon": 175366144,
+          "RssFile": 237916160,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413200384,
+          "memory.current": 186011648,
+          "memory.peak": 186011648,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175370240,
+            "file": 126976,
+            "kernel": 8888320
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429674496,
+          "VmRSS": 425951232,
+          "RssAnon": 184999936,
+          "RssFile": 240951296,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429674496,
+          "memory.current": 199725056,
+          "memory.peak": 203522048,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 184999936,
+            "file": 3977216,
+            "kernel": 9027584
+          }
+        },
+        "warmed": {
+          "VmHWM": 440385536,
+          "VmRSS": 440385536,
+          "RssAnon": 193519616,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 440320000,
+          "memory.current": 208048128,
+          "memory.peak": 208048128,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 193519616,
+            "file": 3977216,
+            "kernel": 9027584
+          }
+        },
+        "after_work": {
+          "VmHWM": 647086080,
+          "VmRSS": 647086080,
+          "RssAnon": 400220160,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 647020544,
+          "memory.current": 415141888,
+          "memory.peak": 415141888,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 400224256,
+            "file": 3977216,
+            "kernel": 9428992
+          }
+        },
+        "after_gc": {
+          "VmHWM": 647098368,
+          "VmRSS": 647098368,
+          "RssAnon": 400232448,
+          "RssFile": 246865920,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 647020544,
+          "memory.current": 415141888,
+          "memory.peak": 415141888,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 400224256,
+            "file": 3977216,
+            "kernel": 9428992
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 6.63585992000003,
+      "simulations": 1000,
+      "selected_action": [
+        12,
+        15
+      ],
+      "tree": {
+        "nodes": 622315,
+        "expanded_nodes": 1000,
+        "materialized_states": 1000
+      },
+      "root_visits_sha256": "9150ee5345844c45f012eb447c66a99a93060d1f0239d080d0dffac96348594d"
+    },
+    {
+      "phase": "search_fixed",
+      "method": "compiled",
+      "batch_size": 1,
+      "requested_seconds": null,
+      "requested_simulations": 1000,
+      "memory": {
+        "python_only": {
+          "VmHWM": 21544960,
+          "VmRSS": 21544960,
+          "RssAnon": 12177408,
+          "RssFile": 9367552,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 21430272,
+          "memory.current": 14008320,
+          "memory.peak": 14008320,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 12177408,
+            "file": 12288,
+            "kernel": 729088
+          }
+        },
+        "libraries_loaded": {
+          "VmHWM": 413257728,
+          "VmRSS": 413257728,
+          "RssAnon": 175345664,
+          "RssFile": 237912064,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 413196288,
+          "memory.current": 185438208,
+          "memory.peak": 185438208,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 175349760,
+            "file": 126976,
+            "kernel": 8888320
+          }
+        },
+        "model_loaded": {
+          "VmHWM": 429686784,
+          "VmRSS": 425963520,
+          "RssAnon": 185016320,
+          "RssFile": 240947200,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 429686784,
+          "memory.current": 199151616,
+          "memory.peak": 202997760,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 185016320,
+            "file": 3977216,
+            "kernel": 9027584
+          }
+        },
+        "warmed": {
+          "VmHWM": 440872960,
+          "VmRSS": 440872960,
+          "RssAnon": 194011136,
+          "RssFile": 246861824,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 440725504,
+          "memory.current": 208273408,
+          "memory.peak": 208273408,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 194011136,
+            "file": 3977216,
+            "kernel": 9027584
+          }
+        },
+        "after_work": {
+          "VmHWM": 647077888,
+          "VmRSS": 647077888,
+          "RssAnon": 400216064,
+          "RssFile": 246861824,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 646901760,
+          "memory.current": 414822400,
+          "memory.peak": 414822400,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 400216064,
+            "file": 3977216,
+            "kernel": 9428992
+          }
+        },
+        "after_gc": {
+          "VmHWM": 647081984,
+          "VmRSS": 647081984,
+          "RssAnon": 400220160,
+          "RssFile": 246861824,
+          "RssShmem": 0,
+          "ru_maxrss_bytes": 646901760,
+          "memory.current": 414822400,
+          "memory.peak": 414822400,
+          "memory.max": 4294967296,
+          "memory.swap.current": 0,
+          "cgroup_breakdown": {
+            "anon": 400216064,
+            "file": 3977216,
+            "kernel": 9428992
+          }
+        }
+      },
+      "affinity": [
+        0
+      ],
+      "cpu_max": "100000 100000",
+      "model_parameters": 304772,
+      "checkpoint_sha256": "0a81599c1601d0a23765b30719d00a6f8b43908583e60b9cf9abde33af5b0020",
+      "tensorflow": "2.16.2",
+      "elapsed_seconds": 6.732965336999996,
+      "simulations": 1000,
+      "selected_action": [
+        12,
+        15
+      ],
+      "tree": {
+        "nodes": 622315,
+        "expanded_nodes": 1000,
+        "materialized_states": 1000
+      },
+      "root_visits_sha256": "9150ee5345844c45f012eb447c66a99a93060d1f0239d080d0dffac96348594d"
+    }
+  ]
+}

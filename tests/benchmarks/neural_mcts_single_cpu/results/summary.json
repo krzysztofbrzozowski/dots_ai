@@ -1,0 +1,156 @@
+{
+  "inference": [
+    {
+      "method": "keras_predict",
+      "positions_per_call": 1,
+      "repeats": 3,
+      "total_positions": 1361,
+      "total_calls": 1361,
+      "total_elapsed_seconds": 30.034672972000067,
+      "positions_per_second": 45.31429395847916,
+      "min_repeat_positions_per_second": 43.773470702873624,
+      "max_repeat_positions_per_second": 46.99955351302294,
+      "mean_p50_call_ms": 21.668097000012192,
+      "mean_p95_call_ms": 24.301563083333615,
+      "cpu_seconds_per_wall_second": 0.9985112570048045
+    },
+    {
+      "method": "predict_on_batch",
+      "positions_per_call": 1,
+      "repeats": 3,
+      "total_positions": 6077,
+      "total_calls": 6077,
+      "total_elapsed_seconds": 30.003432512000018,
+      "positions_per_second": 202.54349223441267,
+      "min_repeat_positions_per_second": 201.97406897343063,
+      "max_repeat_positions_per_second": 202.98179837856037,
+      "mean_p50_call_ms": 4.876270833326164,
+      "mean_p95_call_ms": 5.2600153166489845,
+      "cpu_seconds_per_wall_second": 0.9997178739133715
+    },
+    {
+      "method": "direct_eager",
+      "positions_per_call": 1,
+      "repeats": 3,
+      "total_positions": 2309,
+      "total_calls": 2309,
+      "total_elapsed_seconds": 30.01670963800001,
+      "positions_per_second": 76.92382102656896,
+      "min_repeat_positions_per_second": 75.8448345402227,
+      "max_repeat_positions_per_second": 77.4732200566955,
+      "mean_p50_call_ms": 12.893722333312022,
+      "mean_p95_call_ms": 13.658845766660002,
+      "cpu_seconds_per_wall_second": 0.9996028804574593
+    },
+    {
+      "method": "compiled",
+      "positions_per_call": 1,
+      "repeats": 3,
+      "total_positions": 6127,
+      "total_calls": 6127,
+      "total_elapsed_seconds": 30.00485801299999,
+      "positions_per_second": 204.20026641503847,
+      "min_repeat_positions_per_second": 202.18230644003458,
+      "max_repeat_positions_per_second": 205.75269905935684,
+      "mean_p50_call_ms": 4.855034833326499,
+      "mean_p95_call_ms": 5.150270733344087,
+      "cpu_seconds_per_wall_second": 0.9994274119880006
+    },
+    {
+      "method": "compiled",
+      "positions_per_call": 4,
+      "repeats": 3,
+      "total_positions": 6520,
+      "total_calls": 1630,
+      "total_elapsed_seconds": 30.02176872199999,
+      "positions_per_second": 217.1757453857852,
+      "min_repeat_positions_per_second": 215.9031862045649,
+      "max_repeat_positions_per_second": 218.58037125171415,
+      "mean_p50_call_ms": 18.358951166665822,
+      "mean_p95_call_ms": 18.97049363333091,
+      "cpu_seconds_per_wall_second": 0.9996248211055011
+    },
+    {
+      "method": "compiled",
+      "positions_per_call": 8,
+      "repeats": 3,
+      "total_positions": 6544,
+      "total_calls": 818,
+      "total_elapsed_seconds": 30.06918697200001,
+      "positions_per_second": 217.63142469045397,
+      "min_repeat_positions_per_second": 217.066477644433,
+      "max_repeat_positions_per_second": 217.98946214625772,
+      "mean_p50_call_ms": 36.67718066664823,
+      "mean_p95_call_ms": 37.39613401666683,
+      "cpu_seconds_per_wall_second": 0.9995471846973214
+    },
+    {
+      "method": "compiled",
+      "positions_per_call": 16,
+      "repeats": 3,
+      "total_positions": 6608,
+      "total_calls": 413,
+      "total_elapsed_seconds": 30.071854515000098,
+      "positions_per_second": 219.740355444453,
+      "min_repeat_positions_per_second": 216.9872532108503,
+      "max_repeat_positions_per_second": 223.8861715016324,
+      "mean_p50_call_ms": 72.52288900000774,
+      "mean_p95_call_ms": 74.89826266667023,
+      "cpu_seconds_per_wall_second": 0.999312758513453
+    },
+    {
+      "method": "compiled",
+      "positions_per_call": 32,
+      "repeats": 3,
+      "total_positions": 6624,
+      "total_calls": 207,
+      "total_elapsed_seconds": 30.135375304999968,
+      "positions_per_second": 219.80811365242783,
+      "min_repeat_positions_per_second": 218.8472333370079,
+      "max_repeat_positions_per_second": 220.49714065060118,
+      "mean_p50_call_ms": 145.2288476666581,
+      "mean_p95_call_ms": 148.10109746668255,
+      "cpu_seconds_per_wall_second": 0.9997317149058824
+    },
+    {
+      "method": "compiled",
+      "positions_per_call": 64,
+      "repeats": 3,
+      "total_positions": 6784,
+      "total_calls": 106,
+      "total_elapsed_seconds": 30.65618776499997,
+      "positions_per_second": 221.29300785876782,
+      "min_repeat_positions_per_second": 218.9292312683951,
+      "max_repeat_positions_per_second": 225.81924613668613,
+      "mean_p50_call_ms": 288.81152800002496,
+      "mean_p95_call_ms": 292.3340696499906,
+      "cpu_seconds_per_wall_second": 0.9995230665628743
+    }
+  ],
+  "search": [
+    {
+      "method": "current_predictor",
+      "simulations": 1235,
+      "elapsed_seconds": 30.04097997300005,
+      "simulations_per_second": 41.11050974735118
+    },
+    {
+      "method": "direct_eager",
+      "simulations": 2051,
+      "elapsed_seconds": 30.028096473000005,
+      "simulations_per_second": 68.30269783648033
+    },
+    {
+      "method": "predict_on_batch",
+      "simulations": 4470,
+      "elapsed_seconds": 30.00547251499995,
+      "simulations_per_second": 148.97282479939
+    },
+    {
+      "method": "compiled",
+      "simulations": 4519,
+      "elapsed_seconds": 30.008588555999836,
+      "simulations_per_second": 150.5902215816306
+    }
+  ]
+}
