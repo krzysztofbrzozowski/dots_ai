@@ -1,4 +1,4 @@
-"""Run with python -m unittest _arena.obsolete._game_arena_data_collection.test_collection."""
+"""Run with python -m unittest tests.test_collection."""
 
 from collections import Counter
 from concurrent.futures import wait as wait_for_futures
@@ -16,8 +16,8 @@ from game.enclosure import DotsGame
 from mcts.enclosure import MonteCarloTreeSearch, TwoPlayerMCTSNode
 from training import load_self_play_game
 
-from .audit import audit_collection, inspect_game
-from .collector import (
+from _arena.obsolete._game_arena_data_collection.audit import audit_collection, inspect_game
+from _arena.obsolete._game_arena_data_collection.collector import (
     available_indices,
     collect,
     collection_files,
@@ -28,8 +28,8 @@ from .collector import (
     rollout_budget,
     select_child_from_visits,
 )
-from .config import COLLECTION_CONFIG, CollectionConfig
-from .search import CollectionNode
+from _arena.obsolete._game_arena_data_collection.config import COLLECTION_CONFIG, CollectionConfig
+from _arena.obsolete._game_arena_data_collection.search import CollectionNode
 
 
 SMALL_CONFIG = replace(
@@ -47,7 +47,7 @@ def _fail_first_game_worker(config, plan, output_directory):
     """Picklable failure injection for the real spawn-process pool."""
     if plan["index"] == 0:
         raise RuntimeError("injected worker failure")
-    from .collector import _play_worker
+    from _arena.obsolete._game_arena_data_collection.collector import _play_worker
     return _play_worker(config, plan, output_directory)
 
 

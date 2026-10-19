@@ -83,7 +83,7 @@ Passing `training_data_directory=None` to `EloArenaSession` disables recording.
 From the repository root:
 
 ```bash
-python -m unittest _arena.elo_game_arena.test_elo_arena
+python -m unittest tests.test_elo_arena
 ```
 
 These tests cover rating persistence, human identities, trajectory recording,

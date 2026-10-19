@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 from analysis import load_analysis_path
 from training import load_self_play_game
 
-from . import arena as arena_module
-from .arena import EloArenaSession, resolve_competitor
-from .ratings import RatingStore
+from _arena.elo_game_arena import arena as arena_module
+from _arena.elo_game_arena.arena import EloArenaSession, resolve_competitor
+from _arena.elo_game_arena.ratings import RatingStore
 
 
 @dataclass(frozen=True)
@@ -138,7 +138,7 @@ class RatingStoreTests(unittest.TestCase):
 
 class EloServerTests(unittest.TestCase):
     def test_arena_page_and_shared_assets_are_served(self):
-        from .server import app
+        from _arena.elo_game_arena.server import app
 
         with TestClient(app) as client:
             for path, content_type in (
@@ -156,7 +156,7 @@ class EloServerTests(unittest.TestCase):
                     self.assertTrue(response.content)
 
     def test_read_only_api_endpoints_are_available(self):
-        from .server import app
+        from _arena.elo_game_arena.server import app
 
         with TestClient(app) as client:
             config = client.get("/api/config")

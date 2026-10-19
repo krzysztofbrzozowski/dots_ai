@@ -1,5 +1,7 @@
 # Dots AI documentation
 
+- [Tests](../tests/README.md) — centralized test modules and commands for
+  running the engine, search, training, analysis, and arena suites.
 - [Monte Carlo Tree Search](README_MCTS.md) — selection, expansion, random
   rollouts, backpropagation, UCT, and process-based parallelism.
 - [Sequential neural MCTS](README_NEURAL_MCTS.md) — policy priors, PUCT,

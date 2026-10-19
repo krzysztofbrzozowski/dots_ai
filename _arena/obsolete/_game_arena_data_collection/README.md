@@ -43,7 +43,7 @@ active parallel games finish.
 Run the collector tests from the repository root:
 
 ```bash
-python -m unittest _arena.obsolete._game_arena_data_collection.test_collection
+python -m unittest tests.test_collection
 ```
 
 ## Exact rollout budget

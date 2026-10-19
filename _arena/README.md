@@ -53,9 +53,9 @@ location. The legacy runner accepts `training_data_directory` in `run_arena()`.
 From the repository root:
 
 ```bash
-python -m unittest _arena.elo_game_arena.test_elo_arena \
-  _arena.obsolete._game_arena_data_collection.test_collection
-python test_game_arena.py
+python -m unittest tests.test_elo_arena \
+  tests.test_collection
+python -m tests.test_game_arena
 ```
 
 The Elo tests also check that the page, shared board renderer, stylesheets,

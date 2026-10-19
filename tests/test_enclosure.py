@@ -1,11 +1,11 @@
 """Tests for the Dots enclosure and capture detection
 
-Run directly from the game folder
+Run from the repository root with python -m tests.test_enclosure
 """
 
 import numpy as np
 
-from enclosure import (
+from game.enclosure import (
     EMPTY,
     PLAYER_1,
     PLAYER_2,
