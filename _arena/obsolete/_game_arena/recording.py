@@ -7,7 +7,7 @@ from game.enclosure import PLAYER_1
 
 
 DEFAULT_ARENA_TRAINING_DATA_DIRECTORY = (
-    Path(__file__).resolve().parents[1] / "training_data" / "_game_arena"
+    Path(__file__).resolve().parents[3] / "training_data" / "_game_arena"
 )
 
 
@@ -32,7 +32,7 @@ def arena_filename_suffix(config):
 
     return "__".join(
         (
-            f"_next-p{next_player}",
+            f"next-p{next_player}",
             player_slug(1, config.player_1),
             player_slug(2, config.player_2),
         )

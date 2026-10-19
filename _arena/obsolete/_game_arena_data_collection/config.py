@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 DEFAULT_OUTPUT_DIRECTORY = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[3]
     / "training_data"
     / "_game_arena_data_collection_rollouts"
 )

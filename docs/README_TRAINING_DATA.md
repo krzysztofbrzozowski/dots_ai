@@ -76,19 +76,60 @@ Model batches should group games by board dimensions. This allows one fully
 convolutional model to support several `n × n` variants without padding every
 sample to the largest configured board.
 
-## Game arena records
+## Arena records
 
-Games launched with `python -m _game_arena` are stored separately from uniform
-self-play runs:
+Arena tools now live under [`_arena/`](../_arena/README.md). The current
+interface is the [Elo arena](../_arena/elo_game_arena/README.md); the timed
+match runner and exact-rollout collector are archived under `_arena/obsolete/`.
+Existing datasets are not relocated with the Python packages.
+
+### Elo arena
+
+Completed and adjudicated Elo matches with at least one played move are saved
+using the same schema-v1 fields as self-play, beneath the repository root:
+
+```text
+training_data/_elo_game_arena/25x25/
+```
+
+The dataset directory keeps its `_elo_game_arena` name even though the package
+is now `_arena.elo_game_arena`.
+
+Filenames identify the competitors and whether the match finished naturally
+(`elo-completed`) or was adjudicated with **End match** (`elo-stopped`).
+Human turns have zero visit counts and completed rollouts, so the visit-based
+policy normalization above needs a zero-total guard or must exclude those
+turns. Adjudicated results are based on the score when the match was ended;
+keep them distinguishable from naturally completed games when preparing
+training targets.
+
+### Legacy timed arena
+
+The archived runner is launched with `python -m _arena.obsolete._game_arena`.
+Its default output, relative to the repository root, is:
 
 ```text
 training_data/_game_arena/<rows>x<cols>/
 ```
 
+Existing records remain in this directory. The
+[legacy runner documentation](../_arena/obsolete/_game_arena/README.md) explains
+how to select a different output location.
+
 The size directory identifies the board. The filename encodes the first player
 and both players' MCTS mode, seconds, and worker count after its timestamp and
 unique ID. The contents use the same unchanged schema-v1 fields listed above;
 arena-specific parameters are not added to the NPZ schema.
+
+### Legacy exact-rollout collector
+
+The archived collector is launched with
+`python -m _arena.obsolete._game_arena_data_collection`.
+Its [documented commands](../_arena/obsolete/_game_arena_data_collection/README.md)
+pass `--output-directory training_data/_game_arena_data_collection_rollouts`
+to select the repository's existing collection explicitly. This is also the
+default location when the option is omitted. Games are grouped by board size,
+with `10x10/` as the current default.
 
 ## Loading
 

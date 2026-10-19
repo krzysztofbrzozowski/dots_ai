@@ -12,5 +12,11 @@
   records, action-aligned root statistics, NPZ schema, and perspective handling.
 - [Saved-game analysis GUI](README_ANALYSIS.md) — NPZ validation, the canonical
   analysis model, board overlays, and timeline navigation.
-- [Game arena](../_game_arena/README.md) — independent MCTS mode and time
-  settings for Player 1 and Player 2, with categorized trajectory recording.
+- [Arena tools](../_arena/README.md) — current layout, archived tools, default paths, and
+  verification commands.
+- [Elo arena](../_arena/elo_game_arena/README.md) — rated 25x25 matches between
+  classic MCTS, neural MCTS, and named human players, with trajectory recording.
+- [Legacy game arena](../_arena/obsolete/_game_arena/README.md) — archived
+  MCTS match runner with independent time budgets and execution modes.
+- [Legacy rollout collector](../_arena/obsolete/_game_arena_data_collection/README.md)
+  — archived self-play collection with exact rollout budgets and dataset audits.

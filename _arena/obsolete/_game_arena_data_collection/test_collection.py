@@ -1,4 +1,4 @@
-"""Run with python -m unittest _game_arena_data_collection.test_collection."""
+"""Run with python -m unittest _arena.obsolete._game_arena_data_collection.test_collection."""
 
 from collections import Counter
 from concurrent.futures import wait as wait_for_futures
@@ -173,11 +173,11 @@ class CollectionTests(unittest.TestCase):
 
     def test_time_limit_stops_before_another_game_and_interrupt_preserves_files(self):
         with TemporaryDirectory() as directory:
-            with patch("_game_arena_data_collection.collector.monotonic", side_effect=[10, 11, 12]):
+            with patch("_arena.obsolete._game_arena_data_collection.collector.monotonic", side_effect=[10, 11, 12]):
                 session = collect(SMALL_CONFIG, output_directory=directory, duration_seconds=0.5, progress=None)
             self.assertEqual(session["games_added"], 0)
             collect(SMALL_CONFIG, output_directory=directory, max_games=1, progress=None)
-            with patch("_game_arena_data_collection.collector.play_game", side_effect=KeyboardInterrupt):
+            with patch("_arena.obsolete._game_arena_data_collection.collector.play_game", side_effect=KeyboardInterrupt):
                 session = collect(SMALL_CONFIG, output_directory=directory, max_games=1, progress=None)
             self.assertTrue(session["interrupted"])
             self.assertEqual(session["total_games"], 1)
@@ -278,7 +278,7 @@ class CollectionTests(unittest.TestCase):
             return wait_for_futures(*args, **kwargs)
 
         with TemporaryDirectory() as directory:
-            with patch("_game_arena_data_collection.collector.wait", side_effect=interrupted_wait):
+            with patch("_arena.obsolete._game_arena_data_collection.collector.wait", side_effect=interrupted_wait):
                 session = collect(SMALL_CONFIG, output_directory=directory, duration_seconds=None,
                                   max_games=10, workers=2, progress=None)
             self.assertTrue(session["interrupted"])
@@ -294,8 +294,8 @@ class CollectionTests(unittest.TestCase):
             return result
 
         with TemporaryDirectory() as directory:
-            with patch("_game_arena_data_collection.collector.monotonic", side_effect=lambda: clock[0]), \
-                 patch("_game_arena_data_collection.collector.wait", side_effect=elapsed_wait):
+            with patch("_arena.obsolete._game_arena_data_collection.collector.monotonic", side_effect=lambda: clock[0]), \
+                 patch("_arena.obsolete._game_arena_data_collection.collector.wait", side_effect=elapsed_wait):
                 session = collect(SMALL_CONFIG, output_directory=directory, duration_seconds=1,
                                   workers=2, progress=None)
             self.assertEqual(session["games_added"], 2)
@@ -309,7 +309,7 @@ class CollectionTests(unittest.TestCase):
 
     def test_worker_failure_preserves_other_completed_games_and_allows_resume(self):
         with TemporaryDirectory() as directory:
-            with patch("_game_arena_data_collection.collector._play_worker", _fail_first_game_worker):
+            with patch("_arena.obsolete._game_arena_data_collection.collector._play_worker", _fail_first_game_worker):
                 with self.assertRaisesRegex(RuntimeError, "injected worker failure"):
                     collect(SMALL_CONFIG, output_directory=directory, duration_seconds=None,
                             max_games=4, workers=2, progress=None)

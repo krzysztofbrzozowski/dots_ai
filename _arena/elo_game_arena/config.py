@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 PACKAGE_DIRECTORY = Path(__file__).resolve().parent
-PROJECT_ROOT = PACKAGE_DIRECTORY.parent
+PROJECT_ROOT = PACKAGE_DIRECTORY.parents[1]
 STATIC_DIRECTORY = PACKAGE_DIRECTORY / "static"
 RATINGS_PATH = PACKAGE_DIRECTORY / "ratings.json"
 TRAINING_DATA_DIRECTORY = PROJECT_ROOT / "training_data" / "_elo_game_arena"

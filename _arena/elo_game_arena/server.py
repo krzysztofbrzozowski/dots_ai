@@ -1,19 +1,25 @@
 """FastAPI server for the standalone Elo arena page."""
 
-from pathlib import Path
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .arena import EloArenaSession, POOL_ID
-from .config import AI_PRESETS, COLS, HUMAN_PRESET_ID, RATINGS_PATH, ROWS, STATIC_DIRECTORY
+from .config import (
+    AI_PRESETS,
+    COLS,
+    HUMAN_PRESET_ID,
+    PROJECT_ROOT,
+    RATINGS_PATH,
+    ROWS,
+    STATIC_DIRECTORY,
+)
 from .ratings import RatingStore
 
 
-SHARED_DIRECTORY = Path(__file__).resolve().parents[1] / "GUI" / "shared"
-WORKSPACE_ASSETS_DIRECTORY = Path(__file__).resolve().parents[1] / "GUI" / "analysis"
+SHARED_DIRECTORY = PROJECT_ROOT / "GUI" / "shared"
+WORKSPACE_ASSETS_DIRECTORY = PROJECT_ROOT / "GUI" / "analysis"
 
 
 class StartMatchRequest(BaseModel):

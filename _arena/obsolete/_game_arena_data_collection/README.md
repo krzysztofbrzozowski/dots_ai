@@ -1,4 +1,8 @@
-# Rollout-based game data collection
+# Legacy rollout-based game data collection
+
+This archived collector now lives in
+`_arena/obsolete/_game_arena_data_collection/`. See the
+[arena overview](../../README.md) for the current tools, paths, and commands.
 
 This package collects complete MCTS-versus-MCTS games for policy/value
 training. It uses exact simulation counts instead of per-move time limits, so
@@ -8,20 +12,38 @@ No augmentation is applied during collection.
 From the project root, with the virtual environment active:
 
 ```bash
-python -m _game_arena_data_collection --minutes 10 --workers 8 \
-  --source-id laptop --seed 42
+python -m _arena.obsolete._game_arena_data_collection --minutes 10 --workers 8 \
+  --source-id laptop --seed 42 \
+  --output-directory training_data/_game_arena_data_collection_rollouts
 
-python -m _game_arena_data_collection --games 100 --workers 8 \
-  --source-id laptop --seed 42
+python -m _arena.obsolete._game_arena_data_collection --games 100 --workers 8 \
+  --source-id laptop --seed 42 \
+  --output-directory training_data/_game_arena_data_collection_rollouts
 
-python -m _game_arena_data_collection --audit-only
-python -m unittest _game_arena_data_collection.test_collection
+python -m _arena.obsolete._game_arena_data_collection --audit-only \
+  --output-directory training_data/_game_arena_data_collection_rollouts
 ```
 
-The default output is separate from the old seconds-based collection:
+The default output is the repository's existing rollout dataset, separate
+from the old seconds-based collection. The examples select it explicitly:
 
 ```text
 training_data/_game_arena_data_collection_rollouts/10x10/
+```
+
+Without `--output-directory`, the default path is resolved from the repository
+root, independently of the working directory. An explicit relative path is
+resolved from the working directory. The CLI appends the board-size directory
+automatically; pass the parent dataset directory, not its `10x10/` subdirectory.
+
+The CLI's default ten-minute limit also applies when `--games` is supplied.
+Collection stops submitting games when either limit is reached, then lets
+active parallel games finish.
+
+Run the collector tests from the repository root:
+
+```bash
+python -m unittest _arena.obsolete._game_arena_data_collection.test_collection
 ```
 
 ## Exact rollout budget
@@ -77,12 +99,14 @@ For example:
 
 ```bash
 # Laptop
-python -m _game_arena_data_collection --minutes 480 --workers 8 \
-  --source-id laptop --seed 42
+python -m _arena.obsolete._game_arena_data_collection --minutes 480 --workers 8 \
+  --source-id laptop --seed 42 \
+  --output-directory training_data/_game_arena_data_collection_rollouts
 
 # Another computer
-python -m _game_arena_data_collection --minutes 480 --workers 8 \
-  --source-id pc2 --seed 43
+python -m _arena.obsolete._game_arena_data_collection --minutes 480 --workers 8 \
+  --source-id pc2 --seed 43 \
+  --output-directory training_data/_game_arena_data_collection_rollouts
 ```
 
 Example filenames:

@@ -1,4 +1,4 @@
-"""Focused tests for Elo persistence and human identity handling."""
+"""Tests for Elo persistence, human identities, recordings, and web assets."""
 
 import json
 import time
@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+
+from fastapi.testclient import TestClient
 
 from analysis import load_analysis_path
 from training import load_self_play_game
@@ -132,6 +134,40 @@ class RatingStoreTests(unittest.TestCase):
                 self.assertEqual(int(saved["final_result"]), 0)
                 self.assertEqual(load_analysis_path(saved_path).frame_count, 1)
                 self.assertEqual(completed["ratings"]["match_count"], 1)
+
+
+class EloServerTests(unittest.TestCase):
+    def test_arena_page_and_shared_assets_are_served(self):
+        from .server import app
+
+        with TestClient(app) as client:
+            for path, content_type in (
+                ("/", "text/html"),
+                ("/assets/arena.css", "text/css"),
+                ("/assets/arena.js", "javascript"),
+                ("/shared/board_renderer.js", "javascript"),
+                ("/workspace-assets/analysis.css", "text/css"),
+            ):
+                with self.subTest(path=path):
+                    response = client.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn(content_type, response.headers["content-type"])
+                    self.assertEqual(response.headers["cache-control"], "no-store")
+                    self.assertTrue(response.content)
+
+    def test_read_only_api_endpoints_are_available(self):
+        from .server import app
+
+        with TestClient(app) as client:
+            config = client.get("/api/config")
+            self.assertEqual(config.status_code, 200)
+            self.assertEqual(config.json()["board"], {"rows": 25, "cols": 25})
+            self.assertIn("human", [player["id"] for player in config.json()["players"]])
+
+            state = client.get("/api/state")
+            self.assertEqual(state.status_code, 200)
+            self.assertEqual(state.json()["status"], "idle")
+            self.assertEqual(state.json()["move_count"], 0)
 
 
 if __name__ == "__main__":

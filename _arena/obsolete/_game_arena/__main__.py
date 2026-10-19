@@ -1,4 +1,4 @@
-"""Run the editable arena configuration with ``python -m _game_arena``."""
+"""Run the editable configuration with ``python -m _arena.obsolete._game_arena``."""
 
 from GUI.presentation import player_label, result_label
 

@@ -1,10 +1,17 @@
-# Game arena
+# Legacy game arena
 
-The arena runs one MCTS-vs-MCTS game with independent settings for both
-players. Edit `ARENA_CONFIG` in `config.py`, then run:
+This archived runner now lives in `_arena/obsolete/_game_arena/`.
+Use the [Elo arena](../../elo_game_arena/README.md) for the current match
+interface. See the [arena overview](../../README.md) for paths and commands.
+
+The runner plays MCTS-vs-MCTS games with independent settings for both
+players. Its current command-line entry point runs **30 consecutive games**
+with the same configuration; `run_arena()` runs one game.
+Edit `ARENA_CONFIG` in [`config.py`](config.py), then run from the repository
+root with the project virtual environment active:
 
 ```bash
-python -m _game_arena
+python -m _arena.obsolete._game_arena
 ```
 
 Example configuration:
@@ -28,11 +35,15 @@ Each player independently supports `serial(...)` or `parallel(...)`, so the
 same runner handles serial-vs-serial, serial-vs-parallel,
 parallel-vs-serial, and parallel-vs-parallel games.
 
-Every completed game is saved automatically below:
+Every completed game is saved automatically below the repository root,
+independently of the working directory:
 
 ```text
 training_data/_game_arena/<rows>x<cols>/
 ```
+
+Pass `training_data_directory` to `run_arena()` to select another location.
+Existing records remain in the same dataset directory after the source move.
 
 The filename contains the full arena configuration. For example:
 

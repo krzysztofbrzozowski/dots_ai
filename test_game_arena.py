@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
 
-from _game_arena import (
+from _arena.obsolete._game_arena import (
     ArenaConfig,
     PlayerMCTSConfig,
     SearchMode,
