@@ -127,7 +127,7 @@ def run_neural_mcts_game(
 def main():
     board_state = DotsGame(ROWS, COLS)
     # Get the model
-    predictor = DualHeadPredictor(MODEL_PATH)
+    predictor = DualHeadPredictor(MODEL_PATH, use_tf_function=True)
     initialize_live_game(
         board_state,
         simulation_seconds=SIMULATION_SECONDS,
@@ -137,13 +137,13 @@ def main():
 
     def game_loop():
         PRINT_T(
-            f"Loading and warming {predictor.model_name}",
+            f"Loading and warming tf.function inference for {predictor.model_name}",
             source="MODEL",
         )
         started_at = time.perf_counter()
         predictor.predict_state_policy_value(board_state)
         PRINT_T(
-            f"{predictor.model_name} ready in "
+            f"{predictor.model_name} tf.function ready in "
             f"{time.perf_counter() - started_at:.2f}s",
             level="success",
             source="MODEL",

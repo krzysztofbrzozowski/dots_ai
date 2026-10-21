@@ -125,7 +125,7 @@ class NeuralMCTSNode:
 class NeuralMonteCarloTreeSearch:
     """Sequential PUCT search with one dual-head evaluation per new leaf."""
 
-    def __init__(self, node, evaluator, c_puct=1.5):
+    def __init__(self, node, evaluator, c_puct=2.5):
         if not callable(evaluator):
             raise TypeError("evaluator must be callable")
         if not math.isfinite(c_puct) or c_puct <= 0:

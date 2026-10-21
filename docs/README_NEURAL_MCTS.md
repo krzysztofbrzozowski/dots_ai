@@ -13,10 +13,19 @@ From the repository root:
 .venv/bin/python main_mcts_ml.py
 ```
 
-Then open `http://127.0.0.1:8000`.
+Then open `http://127.0.0.1:8002`.
 
 The first model load is performed in the game thread, so the GUI can start and
-show the loading diagnostic. The loaded model is reused for the entire game.
+show the loading diagnostic. The entry point enables `use_tf_function=True`
+on its `DualHeadPredictor`. Its first evaluation loads the model and traces
+the inference graph before the search clock starts. The loaded model and
+graph are reused for the entire game.
+
+The graph calls the model directly with `training=False`, using fixed board
+dimensions and a dynamic batch dimension. Search still evaluates one position
+per call. Input validation, legal-move masking, and policy/value conversion
+remain outside the graph. Other callers retain the predictor's default
+`model.predict()` path unless they explicitly enable the option.
 
 ## Search flow
 

@@ -2,13 +2,14 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import numpy as np
 
 from game.enclosure import DotsGame, PLAYER_1
 from main_mcts_ml import run_neural_mcts_game
 from mcts.neural_search import NeuralMCTSNode, NeuralMonteCarloTreeSearch
-from ml.predictor import predict_policy_value
+from ml.predictor import DualHeadPredictor, predict_policy_value
 from training import load_self_play_game
 
 
@@ -61,6 +62,73 @@ def test_dual_head_prediction_reads_policy_and_value_with_one_inference():
     assert policy[1, 0] == 0
     assert abs(policy.sum() - 1.0) < 1e-6
     assert abs(prediction["value"] - 0.3) < 1e-6
+
+
+def test_compiled_predictor_matches_predict_and_reuses_inference_graph():
+    from ml.model import build_dual_head_model
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "test-model.keras"
+        build_dual_head_model((2, 2)).save(path)
+        baseline = DualHeadPredictor(path)
+        compiled = DualHeadPredictor(path, use_tf_function=True)
+        model = compiled._load_model()
+        original_weights = [weight.copy() for weight in model.get_weights()]
+        assert compiled._compiled_inference is None
+
+        state = DotsGame(2, 2)
+        states = [state, state.move((0, 0)), state.move((0, 0)).move((1, 1)), state]
+        with patch.object(model, "predict", side_effect=AssertionError("predict() must be bypassed")):
+            for position in states:
+                expected = baseline.predict_state_policy_value(position)
+                actual = compiled.predict_state_policy_value(position)
+                np.testing.assert_allclose(actual["policy"], expected["policy"], rtol=1e-4, atol=1e-5)
+                for field in ("loss", "draw", "win", "value"):
+                    np.testing.assert_allclose(actual[field], expected[field], rtol=1e-4, atol=1e-5)
+                assert actual["player"] == position.next_to_move
+                assert actual["model"] == path.name
+
+        # BatchNorm statistics and all weights stay unchanged during inference.
+        for before, after in zip(original_weights, model.get_weights()):
+            np.testing.assert_array_equal(before, after)
+        assert compiled._compiled_inference.experimental_get_tracing_count() == 1
+        assert baseline._compiled_inference is None
+
+        with np.testing.assert_raises_regex(ValueError, "Model expects"):
+            compiled.predict_state_policy_value(DotsGame(3, 3))
+        assert compiled._compiled_inference.experimental_get_tracing_count() == 1
+
+
+def test_compiled_predictor_completes_a_game_with_compatible_recording():
+    from ml.model import build_dual_head_model
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "test-model.keras"
+        build_dual_head_model((1, 2)).save(path)
+        predictor = DualHeadPredictor(path, use_tf_function=True)
+        state = DotsGame(1, 2)
+        predictor.predict_state_policy_value(state)
+        publications = []
+        final_state = run_neural_mcts_game(
+            state,
+            evaluator=predictor.predict_state_policy_value,
+            simulations_number=4,
+            simulation_seconds=None,
+            move_delay=0,
+            publisher=lambda **payload: publications.append(payload),
+            training_data_directory=Path(directory) / "games",
+        )
+        paths = list((Path(directory) / "games/1x2").glob("*_neural-mcts.npz"))
+        assert len(paths) == 1
+        stored = load_self_play_game(paths[0])
+
+    assert final_state.game_result == 0
+    assert len(publications) == 2
+    assert stored["boards"].shape == (2, 1, 2)
+    assert stored["completed_rollouts"].tolist() == [4, 4]
+    assert stored["has_policy_priors"].tolist() == [1, 1]
+    np.testing.assert_allclose(stored["policy_priors"].sum(axis=(1, 2)), [1, 1])
+    assert predictor._compiled_inference.experimental_get_tracing_count() == 1
 
 
 def test_neural_search_uses_policy_prior_and_selects_by_visit_count():

@@ -309,15 +309,17 @@ Details and measurement limitations:
 | Location | Purpose |
 | --- | --- |
 | [`game_state_to_model_input()`](../../ml/predictor.py) | Converts a game state into board and score inputs |
-| [`_predict_outputs()`](../../ml/predictor.py) | Validates inputs and currently calls `model.predict()` |
+| [`_predict_outputs()`](../../ml/predictor.py) | Validates inputs and uses either `model.predict()` or a supplied inference function |
 | [`predict_policy_value()`](../../ml/predictor.py) | Converts network outputs into a legal policy and scalar value |
 | [`DualHeadPredictor.predict_state_policy_value()`](../../ml/predictor.py) | Exposes evaluation to MCTS, reusing the model and serializing calls with a lock |
 | [`NeuralMonteCarloTreeSearch._run_simulation()`](../../mcts/neural_search.py) | Selects a leaf, obtains its evaluation, and updates the tree |
 | [`benchmark.py`](neural_mcts_single_cpu/benchmark.py) | Contains the experimental eager, `predict_on_batch()`, and `tf.function` calls |
 
-The production predictor still uses `predict()`. The faster alternatives
-were tested through benchmark adapters. This guide does not change how
-the game runs.
+`main_mcts_ml.py` now enables `use_tf_function=True` on its predictor.
+The startup evaluation warms the graph before MCTS begins, and subsequent
+evaluations reuse it. The predictor defaults to `predict()` for other callers.
+The results above were measured before this integration, using benchmark
+adapters; batch scheduling has not been added to MCTS.
 
 ## 9. Similar names with different meanings
 

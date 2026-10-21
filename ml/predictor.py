@@ -131,10 +131,12 @@ def _named_model_output(model, predictions, output_name):
     raise ValueError(f"Model does not provide a {output_name!r} output")
 
 
-def _predict_outputs(model, state):
+def _predict_outputs(model, state, *, inference=None):
     """Validate and run one model inference for a game state."""
     model_input = game_state_to_model_input(state)
     _validate_model_inputs(model, model_input)
+    if inference is not None:
+        return inference(model_input)
     return model.predict(model_input, verbose=0)
 
 
@@ -229,9 +231,9 @@ def predict_policy(model, state):
     return _policy_result(model, _predict_outputs(model, state), state)
 
 
-def predict_policy_value(model, state):
+def predict_policy_value(model, state, *, inference=None):
     """Evaluate both network heads with one model inference."""
-    predictions = _predict_outputs(model, state)
+    predictions = _predict_outputs(model, state, inference=inference)
     return {
         **_policy_result(model, predictions, state),
         **_value_result(model, predictions),
@@ -272,10 +274,14 @@ def predict_move(model, state, move):
 class DualHeadPredictor:
     """Load one Keras checkpoint lazily and reuse it across GUI requests."""
 
-    def __init__(self, model_path=MODEL_PATH, model_loader=None):
+    def __init__(
+        self, model_path=MODEL_PATH, model_loader=None, *, use_tf_function=False,
+    ):
         self.model_path = Path(model_path)
         self._model_loader = model_loader
         self._model = None
+        self._use_tf_function = use_tf_function
+        self._compiled_inference = None
         self._load_lock = Lock()
         self._prediction_lock = Lock()
 
@@ -309,6 +315,27 @@ class DualHeadPredictor:
                 ) from error
 
         return self._model
+
+    def _predict_compiled(self, model_input):
+        """Build one inference graph lazily, under the prediction lock."""
+        if self._compiled_inference is None:
+            import tensorflow as tf
+
+            model = self._load_model()
+
+            @tf.function(
+                input_signature=[
+                    tf.TensorSpec((None, *value.shape[1:]), tf.float32)
+                    for value in model_input
+                ],
+                autograph=False,
+            )
+            def infer(boards, scores):
+                return model((boards, scores), training=False)
+
+            self._compiled_inference = infer
+
+        return self._compiled_inference(*model_input)
 
     def predict_analysis_move(self, saved_game, frame_index, move):
         """Predict one candidate move selected in the analysis GUI."""
@@ -344,7 +371,11 @@ class DualHeadPredictor:
     def predict_state_policy_value(self, state):
         """Predict policy and value together for sequential neural MCTS."""
         with self._prediction_lock:
-            prediction = predict_policy_value(self._load_model(), state)
+            prediction = predict_policy_value(
+                self._load_model(),
+                state,
+                inference=self._predict_compiled if self._use_tf_function else None,
+            )
         return {
             **prediction,
             "player": int(state.next_to_move),
